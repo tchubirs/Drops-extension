@@ -35,5 +35,9 @@
       "DropsPage_ClaimDropRewards",
       "a455deea71bdc9015b78eb49f4acfbce8baa7ccbedd28e549bb025bd0f751930"
     ]
+  },
+  "resgate": {
+    "esperaMin": 2,
+    "entreSeg": 5
   }
 }
