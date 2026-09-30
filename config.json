@@ -37,7 +37,8 @@
     ]
   },
   "resgate": {
-    "esperaMin": 2,
-    "entreSeg": 5
+    "esperaSeg": 30,
+    "entreSeg": 5,
+    "esperaMin": 1
   }
 }

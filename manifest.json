@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Drops do Tchubi",
+  "version": "3.6",
+  "description": "Drops do Rust: clica e ela faz tudo. Ve o canal certo, resgata os drops a 100% e passa ao proximo ate estarem todos.",
+  "background": {
+    "service_worker": "fundo.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Drops: desligado (clica para ligar)"
+  },
+  "icons": {
+    "128": "icone.png"
+  },
+  "permissions": [
+    "tabs",
+    "alarms",
+    "storage",
+    "cookies",
+    "scripting",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://www.twitch.tv/*",
+    "https://gql.twitch.tv/*",
+    "https://id.twitch.tv/*",
+    "https://raw.githubusercontent.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.twitch.tv/*"
+      ],
+      "js": [
+        "espiao.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}
