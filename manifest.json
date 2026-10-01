@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Drops do Tchubi",
-  "version": "3.6",
-  "description": "Drops do Rust: clica e ela faz tudo. Ve o canal certo, resgata os drops a 100% e passa ao proximo ate estarem todos.",
+  "version": "3.7",
+  "description": "Drops do Rust na Twitch sem esforco: ve o canal certo, resgata cada drop a 100% e passa ao proximo ate ter todos.",
   "background": {
     "service_worker": "fundo.js",
     "type": "module"
@@ -19,7 +19,8 @@
     "storage",
     "cookies",
     "scripting",
-    "notifications"
+    "notifications",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://www.twitch.tv/*",
@@ -38,5 +39,6 @@
       "run_at": "document_start",
       "world": "MAIN"
     }
-  ]
+  ],
+  "homepage_url": "https://tchubirs.github.io/drops/"
 }

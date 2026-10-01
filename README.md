@@ -27,3 +27,5 @@ cada 6 horas; só código novo precisa destes 2 passos.
 
 As consultas à Twitch e as regras de "este drop conta agora" vêm do TwitchDropsMiner
 (DevilXD, licença MIT), reescritas em JavaScript para correrem no Chrome.
+- `loja/` — tudo para a Chrome Web Store: o pacote `drops-extensao-3.7.zip`, as imagens e
+  os textos a colar (`loja/LEIA-ME.md`). Página e privacidade: https://tchubirs.github.io/drops/
