@@ -1,4 +1,4 @@
-# Drops do Tchubi
+# Drops Auto-Claim
 
 Extensão do Chrome para os drops da Twitch (Rust). Tu clicas no ícone; ela faz o resto:
 vê o canal certo, resgata os drops a 100% e passa ao próximo até estarem todos.
@@ -14,7 +14,7 @@ vê o canal certo, resgata os drops a 100% e passa ao próximo até estarem todo
 ## Atualizar (sem reinstalar, sem perder nada)
 
 1. Descarrega o ZIP outra vez e **substitui** os ficheiros na mesma pasta.
-2. Em `chrome://extensions`, carrega no **↻** da "Drops do Tchubi".
+2. Em `chrome://extensions`, carrega no **↻** da "Drops Auto-Claim".
 
 Os códigos da Twitch e os tempos do resgate (`config.json`) atualizam-se sozinhos a
 cada 6 horas; só código novo precisa destes 2 passos.
@@ -27,5 +27,5 @@ cada 6 horas; só código novo precisa destes 2 passos.
 
 As consultas à Twitch e as regras de "este drop conta agora" vêm do TwitchDropsMiner
 (DevilXD, licença MIT), reescritas em JavaScript para correrem no Chrome.
-- `loja/` — tudo para a Chrome Web Store: o pacote `drops-extensao-3.7.zip`, as imagens e
+- `loja/` — tudo para a Chrome Web Store: o pacote `drops-extensao-3.8.zip`, as imagens e
   os textos a colar (`loja/LEIA-ME.md`). Página e privacidade: https://tchubirs.github.io/drops/

@@ -6,14 +6,14 @@ Tudo o que a loja pede já está pronto. Tu só fazes os passos que exigem a tua
 
 1. Abre https://chrome.google.com/webstore/devconsole e entra com a tua conta Google.
 2. Paga a taxa única de registo de programador (o valor aparece no ecrã) e aceita o acordo.
-3. **New item** → carrega `drops-extensao-3.7.zip` (do repositório
+3. **New item** → carrega `drops-extensao-3.8.zip` (do repositório
    https://github.com/tchubirs/Drops-extension, pasta `loja/`).
 4. Preenche cada separador com os textos abaixo (copiar e colar).
 5. **Submit for review**. A Google revê e aprova ou recusa por e-mail. O prazo é decidido por eles.
 
 ## Separador "Store listing"
 
-- **Nome:** Drops do Tchubi (vem do manifest)
+- **Nome:** Drops Auto-Claim (vem do manifest)
 - **Categoria:** Entertainment
 - **Idioma:** Portuguese (Brazil)
 - **Descrição curta** (vem do manifest): Drops do Rust na Twitch sem esforco: ve o canal certo, resgata cada drop a 100% e passa ao proximo ate ter todos.
@@ -57,7 +57,7 @@ Não é uma extensão oficial da Twitch nem da Facepunch.
   - `cookies`: ler o cookie de login de twitch.tv do próprio utilizador para pedir à Twitch o progresso dos drops e resgatá-los em nome dele.
   - `scripting`: ler o progresso e o código de verificação que a própria página do inventário da Twitch gera, carregar no play se o vídeo parar e aceitar o aviso de conteúdo para maiores.
   - `notifications`: avisar quando um drop é resgatado e quando estão todos.
-  - `contextMenus`: menu do ícone com "Como funciona e privacidade" e o canal do autor.
+  - `contextMenus`: menu do ícone com "Como funciona e privacidade".
   - Acesso a `twitch.tv`, `gql.twitch.tv` e `id.twitch.tv`: são os sites dos drops, da API que dá o progresso e da sessão do utilizador.
   - Acesso a `raw.githubusercontent.com`: descarregar a cada 6 horas o ficheiro público `config.json` (só dados: os códigos das consultas da Twitch), para continuar a funcionar quando a Twitch os muda.
 
@@ -75,14 +75,13 @@ Não é uma extensão oficial da Twitch nem da Facepunch.
 - **Visibility:** Public
 - **Regiões:** todas
 
-## O link do teu canal no menu da extensão
-
-O menu do ícone (botão direito) mostra "Seguir o Tchubi (autor)" quando o `config.json`
-público tiver o campo `"canal"` com o teu link (ex.: `"canal": "https://..."`). Basta
-mudá-lo no GitHub: as extensões já instaladas apanham-no em até 6 horas, sem nova versão
-na loja.
-
 ## Riscos a saber
+
+- **O teu nome já não aparece na extensão, mas a ligação a ti continua visível.** O código
+  está em `github.com/tchubirs/...`, a página em `tchubirs.github.io` e a loja mostra o nome
+  e o e-mail da conta de programador. Quem procurar chega a ti. Como és parceiro da
+  Facepunch, decide antes de publicar: usar contas separadas (GitHub e Google) para a
+  extensão, ou não publicar e usá-la só tu.
 
 - Ver streams de forma automática pode ir contra as regras da Twitch. A Google também pode
   recusar a extensão por isso; se recusar, o e-mail diz a razão.

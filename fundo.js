@@ -191,20 +191,12 @@ chrome.alarms.create('drops', { periodInMinutes: 2 });
 chrome.alarms.onAlarm.addListener(a => { if (a.name === 'drops' || a.name === 'resgate') passo(); });
 chrome.runtime.onStartup.addListener(passo);
 
-// menu do icone (botao direito): o canal do autor (se o config.json o tiver) e a pagina de ajuda
+// menu do icone (botao direito): a pagina de ajuda e privacidade
 const AJUDA = 'https://tchubirs.github.io/drops/';
 async function menu() {
-  const { config } = await chrome.storage.local.get('config');
-  const canal = (config && typeof config.canal === 'string' && /^https:\/\//.test(config.canal)) ? config.canal : '';
   await chrome.contextMenus.removeAll();
-  if (canal) chrome.contextMenus.create({ id: 'canal', title: 'Seguir o Tchubi (autor)', contexts: ['action'] });
   chrome.contextMenus.create({ id: 'ajuda', title: 'Como funciona e privacidade', contexts: ['action'] });
 }
-chrome.contextMenus.onClicked.addListener(async i => {
-  const { config } = await chrome.storage.local.get('config');
-  const url = i.menuItemId === 'canal' ? config && config.canal : AJUDA;
-  if (url) chrome.tabs.create({ url });
-});
+chrome.contextMenus.onClicked.addListener(i => { if (i.menuItemId === 'ajuda') chrome.tabs.create({ url: AJUDA }); });
 chrome.runtime.onInstalled.addListener(menu);
 chrome.runtime.onStartup.addListener(menu);
-chrome.storage.onChanged.addListener(m => { if (m.config) menu(); });
