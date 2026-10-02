@@ -1,4 +1,4 @@
-# Pôr a extensão na Chrome Web Store
+# Pôr a extensão na Chrome Web Store (não listada: só com o link)
 
 Tudo o que a loja pede já está pronto. Tu só fazes os passos que exigem a tua conta.
 
@@ -10,6 +10,8 @@ Tudo o que a loja pede já está pronto. Tu só fazes os passos que exigem a tua
    https://github.com/tchubirs/Drops-extension, pasta `loja/`).
 4. Preenche cada separador com os textos abaixo (copiar e colar).
 5. **Submit for review**. A Google revê e aprova ou recusa por e-mail. O prazo é decidido por eles.
+6. Depois de aprovada, copia o link da página da extensão na loja. É esse link que dás às
+   pessoas: abrem, carregam em **Adicionar ao Chrome** e fica instalada (e atualiza-se sozinha).
 
 ## Separador "Store listing"
 
@@ -72,7 +74,8 @@ Não é uma extensão oficial da Twitch nem da Facepunch.
 
 ## Separador "Distribution"
 
-- **Visibility:** Public
+- **Visibility:** **Unlisted** (não listada): não aparece nas pesquisas da loja; só instala quem
+  tiver o link da página. Dás o link a quem quiseres.
 - **Regiões:** todas
 
 ## Riscos a saber
