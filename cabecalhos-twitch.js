@@ -1,18 +1,20 @@
-// Corre dentro das paginas da Twitch, antes da propria pagina. Quando a pagina fala com
-// a Twitch (gql.twitch.tv), guarda os cabecalhos que ela usa — sobretudo o
-// "Client-Integrity", que a Twitch exige para ler as campanhas — para a extensao os
-// reutilizar. Nao muda nada nos pedidos da pagina e nao envia nada para lado nenhum.
+// Le os cabecalhos dos pedidos que a propria pagina da Twitch faz a gql.twitch.tv e guarda-os
+// na memoria da pagina (window.__twitchCabecalhos), para a extensao os reutilizar nos seus
+// pedidos a mesma Twitch. Sao: o "Client-Integrity" (verificacao que a Twitch exige para ler as
+// campanhas de drops), identificadores de sessao e de versao, e o token de sessao da propria
+// Twitch (Authorization). Nao muda nada nos pedidos da pagina. Nao grava em disco e nao envia
+// nada para nenhum outro sitio: so sao usados em pedidos a gql.twitch.tv (ver fundo.js).
 (() => {
   const QUERO = ['client-integrity', 'x-device-id', 'client-session-id', 'client-version', 'client-id', 'authorization'];
   const guardar = (url, cab) => {
     if (!/gql\.twitch\.tv/.test(String(url || ''))) return;
-    const out = window.__dropsCabecalhos || {};
+    const out = window.__twitchCabecalhos || {};
     const por = (k, v) => { if (QUERO.includes(String(k).toLowerCase()) && v) out[String(k).toLowerCase()] = String(v); };
     if (cab instanceof Headers) cab.forEach((v, k) => por(k, v));
     else if (Array.isArray(cab)) cab.forEach(([k, v]) => por(k, v));
     else if (cab && typeof cab === 'object') Object.entries(cab).forEach(([k, v]) => por(k, v));
     if (out['client-integrity']) out.quando = Date.now();
-    window.__dropsCabecalhos = out;
+    window.__twitchCabecalhos = out;
   };
   const f = window.fetch;
   window.fetch = function (entrada, opcoes) {
@@ -23,6 +25,6 @@
     return f.apply(this, arguments);
   };
   const abrir = XMLHttpRequest.prototype.open, cab = XMLHttpRequest.prototype.setRequestHeader;
-  XMLHttpRequest.prototype.open = function (m, url) { this.__dropsUrl = url; return abrir.apply(this, arguments); };
-  XMLHttpRequest.prototype.setRequestHeader = function (k, v) { try { guardar(this.__dropsUrl, { [k]: v }); } catch { /* idem */ } return cab.apply(this, arguments); };
+  XMLHttpRequest.prototype.open = function (m, url) { this.__twitchUrl = url; return abrir.apply(this, arguments); };
+  XMLHttpRequest.prototype.setRequestHeader = function (k, v) { try { guardar(this.__twitchUrl, { [k]: v }); } catch { /* idem */ } return cab.apply(this, arguments); };
 })();

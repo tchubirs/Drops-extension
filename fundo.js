@@ -42,7 +42,7 @@ async function separador(id, url, activo) {
 }
 
 // as consultas vao de dentro do separador do inventario, com os mesmos cabecalhos que a
-// propria pagina usa (o "Client-Integrity" que ela gera; guardado pelo espiao.js)
+// propria pagina usa (o "Client-Integrity" que ela gera; guardado por cabecalhos-twitch.js)
 function pedirPeloInventario(tabId, token) {
   return async corpo => {
     for (let tentativa = 0; ; tentativa++) {
@@ -51,8 +51,8 @@ function pedirPeloInventario(tabId, token) {
         [{ result: r }] = await chrome.scripting.executeScript({ target: { tabId }, world: 'MAIN', args: [corpo, token, WEB],
           func: async (corpo, token, id) => {
             // espera ate 15 s que a pagina faca o primeiro pedido dela (com a verificacao)
-            for (let i = 0; i < 30 && !(window.__dropsCabecalhos || {})['client-integrity']; i++) await new Promise(ok => setTimeout(ok, 500));
-            const c = window.__dropsCabecalhos || {};
+            for (let i = 0; i < 30 && !(window.__twitchCabecalhos || {})['client-integrity']; i++) await new Promise(ok => setTimeout(ok, 500));
+            const c = window.__twitchCabecalhos || {};
             const cab = { 'Client-Id': c['client-id'] || id, Authorization: c.authorization || `OAuth ${token}`, 'Content-Type': 'text/plain;charset=UTF-8' };
             if (c['client-integrity']) cab['Client-Integrity'] = c['client-integrity'];
             if (c['x-device-id']) cab['X-Device-Id'] = c['x-device-id'];

@@ -6,7 +6,7 @@ Tudo o que a loja pede já está pronto. Tu só fazes os passos que exigem a tua
 
 1. Abre https://chrome.google.com/webstore/devconsole e entra com a tua conta Google.
 2. Paga a taxa única de registo de programador (o valor aparece no ecrã) e aceita o acordo.
-3. **New item** → carrega `drops-extensao-3.8.zip` (do repositório
+3. **New item** → carrega `drops-extensao-3.9.zip` (do repositório
    https://github.com/tchubirs/Drops-extension, pasta `loja/`).
 4. Preenche cada separador com os textos abaixo (copiar e colar).
 5. **Submit for review**. A Google revê e aprova ou recusa por e-mail. O prazo é decidido por eles.
@@ -57,7 +57,8 @@ Não é uma extensão oficial da Twitch nem da Facepunch.
   - `alarms`: verificar o progresso de 2 em 2 minutos e resgatar um drop 30 segundos depois de chegar a 100%.
   - `storage`: guardar no navegador se a extensão está ligada, o progresso e os canais a evitar.
   - `cookies`: ler o cookie de login de twitch.tv do próprio utilizador para pedir à Twitch o progresso dos drops e resgatá-los em nome dele.
-  - `scripting`: ler o progresso e o código de verificação que a própria página do inventário da Twitch gera, carregar no play se o vídeo parar e aceitar o aviso de conteúdo para maiores.
+  - `scripting`: correr na página do inventário da Twitch para fazer os pedidos de progresso e resgate com a verificação que a própria página gera, carregar no play se o vídeo parar e aceitar o aviso de conteúdo para maiores.
+  - Script de conteúdo `cabecalhos-twitch.js` (só em twitch.tv): lê os cabeçalhos dos pedidos que a própria página da Twitch faz a gql.twitch.tv (Client-Integrity, ids de sessão e versão, e o token de sessão da Twitch) e guarda-os só na memória da página, para reutilizar nos pedidos da extensão à mesma Twitch. Não grava em disco nem envia a ninguém.
   - `notifications`: avisar quando um drop é resgatado e quando estão todos.
   - `contextMenus`: menu do ícone com "Como funciona e privacidade".
   - Acesso a `twitch.tv`, `gql.twitch.tv` e `id.twitch.tv`: são os sites dos drops, da API que dá o progresso e da sessão do utilizador.

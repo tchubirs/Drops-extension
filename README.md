@@ -21,11 +21,11 @@ cada 6 horas; só código novo precisa destes 2 passos.
 
 ## Ficheiros
 
-- `manifest.json`, `fundo.js`, `logica.js`, `espiao.js`, `icone.png` — a extensão.
+- `manifest.json`, `fundo.js`, `logica.js`, `cabecalhos-twitch.js`, `icone.png` — a extensão.
 - `config.json` — códigos das consultas da Twitch e tempos (a extensão lê-o daqui).
 - `logica.test.mjs` — testes (`node logica.test.mjs`).
 
 As consultas à Twitch e as regras de "este drop conta agora" vêm do TwitchDropsMiner
 (DevilXD, licença MIT), reescritas em JavaScript para correrem no Chrome.
-- `loja/` — tudo para a Chrome Web Store: o pacote `drops-extensao-3.8.zip`, as imagens e
+- `loja/` — tudo para a Chrome Web Store: o pacote `drops-extensao-3.9.zip`, as imagens e
   os textos a colar (`loja/LEIA-ME.md`). Página e privacidade: https://tchubirs.github.io/drops/
