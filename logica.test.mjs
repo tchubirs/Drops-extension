@@ -2,7 +2,7 @@
 // A extensao nao resgata: aqui "tu" resgatas quando ela diz que ha drops prontos.
 // Nao prova que a Twitch verdadeira aceita tudo.
 import assert from 'assert';
-import { canalDe, criarGql, decidir, plano, acompanhar, aplicarConfig, CONSULTAS, resgatar, prontosParaResgatar, RESGATE } from './logica.js';
+import { canalDe, criarGql, decidir, plano, acompanhar, aplicarConfig, CONSULTAS, resgatar, prontosParaResgatar, RESGATE, WEB } from './logica.js';
 
 const rust = { id: '263490', name: 'Rust', slug: 'rust' };
 function criarMundo() {
@@ -122,13 +122,16 @@ console.log('ok   minutos parados 8 min no mesmo canal: muda; a subir: fica (um 
 
 // 5. auto-correcao: aceita uma config boa; rejeita lixo e mantem os codigos anteriores
 const h64 = '0'.repeat(64);
-const boa = { jogo: { slug: 'rust', nome: 'Rust' }, consultas: Object.fromEntries(Object.keys(CONSULTAS).map(k => [k, ['Op' + k, h64]])) };
+const boa = { jogo: { slug: 'rust', nome: 'Rust' }, consultas: Object.fromEntries(Object.keys(CONSULTAS).map(k => [k, [CONSULTAS[k][0], h64]])) };
 assert.strictEqual(aplicarConfig(boa), true);
 assert.strictEqual(CONSULTAS.inventario[1], h64, 'passou a usar o hash novo');
 const antes = CONSULTAS.canal[1];
 assert.strictEqual(aplicarConfig({ consultas: { canal: ['x', 'curto'] } }), false, 'hash invalido: rejeita');
 assert.strictEqual(aplicarConfig({ consultas: { canal: ['Op', h64] } }), false, 'faltam consultas: rejeita');
 assert.strictEqual(aplicarConfig(null), false);
+const nomeTrocado = JSON.parse(JSON.stringify(boa)); nomeTrocado.consultas.canal[0] = 'OutraOperacao';
+assert.strictEqual(aplicarConfig(nomeTrocado), false, 'lista fechada: nome de consulta diferente das 7 conhecidas: rejeita');
+assert.strictEqual(aplicarConfig({ ...boa, web: 'lixo' }), true); assert.notStrictEqual(WEB, 'lixo', 'web invalido: ignorado');
 assert.strictEqual(CONSULTAS.canal[1], antes, 'depois de rejeitar, ficam os codigos que ja tinha');
 console.log('ok   auto-correcao: aceita uma config completa e valida; rejeita lixo e mantem os codigos de reserva');
 

@@ -14,11 +14,22 @@ const CONFIG_HORAS = 6;
 
 const INVENTARIO = 'https://www.twitch.tv/drops/inventory';
 const PARADO_MIN = 8, EVITAR_MIN = 30;
-const guardado = () => chrome.storage.local.get(['ligado', 'tabInv', 'tabStream', 'evitar', 'progresso', 'recarregado', 'config', 'configQuando', 'vistosProntos', 'botaoQuando']);
+const guardado = () => chrome.storage.local.get(['ligado', 'tabInv', 'tabStream', 'evitar', 'progresso', 'recarregado', 'config', 'configQuando', 'vistosProntos', 'botaoQuando', 'registo', 'ultimoErro']);
 const mostrar = async (texto, cor, titulo) => {
   await chrome.action.setBadgeText({ text: texto });
   if (cor) await chrome.action.setBadgeBackgroundColor({ color: cor });
   if (titulo) await chrome.action.setTitle({ title: titulo.slice(0, 2000) });
+};
+// registo visivel (menu do icone -> "Ver registo"): so o que a extensao fez, guardado neste Chrome
+const registar = async texto => {
+  const { registo = [] } = await chrome.storage.local.get('registo');
+  registo.push({ t: Date.now(), texto });
+  await chrome.storage.local.set({ registo: registo.slice(-100) });
+};
+// modo repouso: sem campanha activa, verifica de hora a hora em vez de 2 em 2 minutos
+const periodo = async min => {
+  const a = await chrome.alarms.get('drops');
+  if (!a || a.periodInMinutes !== min) { await chrome.alarms.create('drops', { periodInMinutes: min }); await registar(min > 2 ? 'sem campanha do Rust: modo repouso (verifico de hora a hora)' : 'campanha activa: verifico de 2 em 2 minutos'); }
 };
 const dormir = ms => new Promise(ok => setTimeout(ok, ms));
 
@@ -151,8 +162,12 @@ async function passo() {
         chrome.notifications.create({ type: 'basic', iconUrl: 'icone.png', title: 'Drops do Rust', message: `Resgatado: ${resgatados.map(x => x.nome).join(', ')}` });
       }
     }
+    await periodo(d.campanhas.length ? 2 : 60);
+    if (resgatados.length) await registar(`resgatado: ${resgatados.map(x => x.nome).join(', ')}`);
+    if (d.ir) await registar(`mudei para o canal ${d.ir.split('/').pop()}`);
+    await chrome.storage.local.set({ ultimoErro: '' });
     const { prog, parado } = acompanhar(g.progresso, d, agora, PARADO_MIN);
-    if (parado) { evitar[d.canal] = agora + EVITAR_MIN * 60000; d.aviso = `${d.canal}: os minutos nao sobem ha ${PARADO_MIN} min, mudo de canal daqui a 2 min`; }
+    if (parado) { await registar(`${d.canal}: minutos parados ha ${PARADO_MIN} min, vou evitar este canal`); evitar[d.canal] = agora + EVITAR_MIN * 60000; d.aviso = `${d.canal}: os minutos nao sobem ha ${PARADO_MIN} min, mudo de canal daqui a 2 min`; }
     await chrome.storage.local.set({ evitar, progresso: prog });
 
     const linhas = d.campanhas.map(c => `${c.nome}${c.canais ? ` (${c.canais.slice(0, 3).join(', ')})` : ''}: ` +
@@ -166,6 +181,7 @@ async function passo() {
     // (so acaba quando ja nao ha nada por resgatar)
     if (d.fim && !d.prontos.length) {
       await chrome.storage.local.set({ ligado: false });
+      await registar(`fim: ${d.total}/${d.total} drops a 100%`);
       await mostrar('FIM', '#1f7a3d', `Drops: todos a 100% (${d.total}/${d.total}).\n${avisos}\nConfirma no inventario que estao resgatados e liga a Twitch a Steam (twitch.facepunch.com/connect).`);
       chrome.notifications.create({ type: 'basic', iconUrl: 'icone.png', title: 'Drops do Rust: acabou',
         message: `Os ${d.total} drops estao a 100%. Confirma no inventario e liga a Twitch a Steam.` });
@@ -178,16 +194,20 @@ async function passo() {
     else await mostrar('...', '#8a5a00', `Drops: ${d.aviso || 'a espera'}\n${avisos ? avisos + '\n' : ''}${linhas}`);
   } catch (e) {
     await mostrar('!', '#b3261e', `Drops: erro (${e.message})`);
+    const { ultimoErro } = await chrome.storage.local.get('ultimoErro');
+    if (ultimoErro !== e.message) { await registar(`erro: ${e.message}`); await chrome.storage.local.set({ ultimoErro: e.message }); }
   } finally { aCorrer = false; }
 }
 
 chrome.action.onClicked.addListener(async () => {
   const { ligado } = await guardado();
   await chrome.storage.local.set({ ligado: !ligado, evitar: {}, progresso: {} });
+  await registar(ligado ? 'desligado por ti' : 'ligado por ti');
+  if (!ligado) await chrome.alarms.create('drops', { periodInMinutes: 2 });
   if (ligado) await mostrar('', null, 'Drops: desligado (clica para ligar)');
   else { await mostrar('...', '#8a5a00', 'Drops: a comecar (abre o inventario e a stream)'); passo(); }
 });
-chrome.alarms.create('drops', { periodInMinutes: 2 });
+chrome.alarms.get('drops').then(a => { if (!a) chrome.alarms.create('drops', { periodInMinutes: 2 }); });
 chrome.alarms.onAlarm.addListener(a => { if (a.name === 'drops' || a.name === 'resgate') passo(); });
 chrome.runtime.onStartup.addListener(passo);
 
@@ -196,7 +216,11 @@ const AJUDA = 'https://tchubirs.github.io/drops/';
 async function menu() {
   await chrome.contextMenus.removeAll();
   chrome.contextMenus.create({ id: 'ajuda', title: 'Como funciona e privacidade', contexts: ['action'] });
+  chrome.contextMenus.create({ id: 'registo', title: 'Ver registo', contexts: ['action'] });
 }
-chrome.contextMenus.onClicked.addListener(i => { if (i.menuItemId === 'ajuda') chrome.tabs.create({ url: AJUDA }); });
+chrome.contextMenus.onClicked.addListener(i => {
+  if (i.menuItemId === 'ajuda') chrome.tabs.create({ url: AJUDA });
+  if (i.menuItemId === 'registo') chrome.tabs.create({ url: chrome.runtime.getURL('registo.html') });
+});
 chrome.runtime.onInstalled.addListener(menu);
 chrome.runtime.onStartup.addListener(menu);

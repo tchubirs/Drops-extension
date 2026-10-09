@@ -22,6 +22,9 @@ export let CONSULTAS = {
   resgatar: ['DropsPage_ClaimDropRewards', 'a455deea71bdc9015b78eb49f4acfbce8baa7ccbedd28e549bb025bd0f751930'],
 };
 
+// lista fechada: os nomes das 7 consultas ficam fixos; a config remota so pode trocar os hashes
+const OPERACOES = Object.fromEntries(Object.entries(CONSULTAS).map(([k, v]) => [k, v[0]]));
+
 // Substituir os codigos por uma config vinda de fora (a auto-correcao). So aceita se
 // tiver as 6 consultas certas, cada uma com nome e um hash de 64 caracteres; senao,
 // ficam os que a extensao ja tinha. Devolve true se aplicou.
@@ -32,11 +35,11 @@ export function aplicarConfig(cfg) {
   const precisas = Object.keys(CONSULTAS);
   for (const k of precisas) {
     const v = c[k];
-    if (!Array.isArray(v) || v.length !== 2 || typeof v[0] !== 'string' || !/^[0-9a-f]{64}$/.test(v[1] || '')) return false;
+    if (!Array.isArray(v) || v.length !== 2 || v[0] !== OPERACOES[k] || !/^[0-9a-f]{64}$/.test(v[1] || '')) return false;
   }
   CONSULTAS = Object.fromEntries(precisas.map(k => [k, [c[k][0], c[k][1]]]));
-  if (cfg.jogo && cfg.jogo.slug && cfg.jogo.nome) JOGO = { slug: String(cfg.jogo.slug), nome: String(cfg.jogo.nome) };
-  if (typeof cfg.web === 'string' && cfg.web) WEB = cfg.web;
+  if (cfg.jogo && /^[a-z0-9_-]{1,40}$/.test(cfg.jogo.slug) && typeof cfg.jogo.nome === 'string' && /^[\w .'-]{1,40}$/.test(cfg.jogo.nome)) JOGO = { slug: String(cfg.jogo.slug), nome: String(cfg.jogo.nome) };
+  if (typeof cfg.web === 'string' && /^[a-z0-9]{20,40}$/.test(cfg.web)) WEB = cfg.web;
   const r = cfg.resgate || {};
   if (Number.isFinite(r.esperaSeg) && r.esperaSeg >= 5 && r.esperaSeg <= 3600) RESGATE = { ...RESGATE, esperaSeg: r.esperaSeg };
   if (Number.isFinite(r.entreSeg) && r.entreSeg >= 2 && r.entreSeg <= 120) RESGATE = { ...RESGATE, entreSeg: r.entreSeg };

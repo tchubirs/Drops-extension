@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Drops Auto-Claim",
-  "version": "3.9",
+  "version": "3.10",
   "description": "Drops do Rust na Twitch sem esforco: ve o canal certo, resgata cada drop a 100% e passa ao proximo ate ter todos.",
   "background": {
     "service_worker": "fundo.js",

@@ -6,7 +6,7 @@ Tudo o que a loja pede já está pronto. Tu só fazes os passos que exigem a tua
 
 1. Abre https://chrome.google.com/webstore/devconsole e entra com a tua conta Google.
 2. Paga a taxa única de registo de programador (o valor aparece no ecrã) e aceita o acordo.
-3. **New item** → carrega `drops-extensao-3.9.zip` (do repositório
+3. **New item** → carrega `drops-extensao-3.10.zip` (do repositório
    https://github.com/tchubirs/Drops-extension, pasta `loja/`).
 4. Preenche cada separador com os textos abaixo (copiar e colar).
 5. **Submit for review**. A Google revê e aprova ou recusa por e-mail. O prazo é decidido por eles.

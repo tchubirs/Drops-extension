@@ -3,6 +3,18 @@
 Extensão do Chrome para os drops da Twitch (Rust). Tu clicas no ícone; ela faz o resto:
 vê o canal certo, resgata os drops a 100% e passa ao próximo até estarem todos.
 
+## Aviso
+
+Ver streams de forma automática pode ir contra as regras da Twitch (ToS) e da Facepunch.
+Usa por tua conta e risco, só na tua conta, e não uses em mais de uma conta. Isto não é uma
+extensão oficial da Twitch nem da Facepunch.
+
+## Registo e repouso
+
+- Botão direito no ícone → **Ver registo**: lista o que a extensão fez (canal, resgates, erros).
+- Sem campanha do Rust ativa, ela verifica de hora a hora em vez de 2 em 2 minutos.
+- O `config.json` só pode trocar os códigos (hashes) das 7 consultas conhecidas.
+
 ## Instalar (uma vez)
 
 1. Carrega em **Code → Download ZIP** (nesta página) e descomprime numa pasta fixa,
@@ -21,11 +33,11 @@ cada 6 horas; só código novo precisa destes 2 passos.
 
 ## Ficheiros
 
-- `manifest.json`, `fundo.js`, `logica.js`, `cabecalhos-twitch.js`, `icone.png` — a extensão.
+- `manifest.json`, `fundo.js`, `logica.js`, `cabecalhos-twitch.js`, `registo.html`, `registo.js`, `icone.png` — a extensão.
 - `config.json` — códigos das consultas da Twitch e tempos (a extensão lê-o daqui).
 - `logica.test.mjs` — testes (`node logica.test.mjs`).
 
 As consultas à Twitch e as regras de "este drop conta agora" vêm do TwitchDropsMiner
 (DevilXD, licença MIT), reescritas em JavaScript para correrem no Chrome.
-- `loja/` — tudo para a Chrome Web Store: o pacote `drops-extensao-3.9.zip`, as imagens e
+- `loja/` — tudo para a Chrome Web Store: o pacote `drops-extensao-3.10.zip`, as imagens e
   os textos a colar (`loja/LEIA-ME.md`). Página e privacidade: https://tchubirs.github.io/drops/
