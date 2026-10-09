@@ -3,12 +3,6 @@
 Extensão do Chrome para os drops da Twitch (Rust). Tu clicas no ícone; ela faz o resto:
 vê o canal certo, resgata os drops a 100% e passa ao próximo até estarem todos.
 
-## Aviso
-
-Ver streams de forma automática pode ir contra as regras da Twitch (ToS) e da Facepunch.
-Usa por tua conta e risco, só na tua conta, e não uses em mais de uma conta. Isto não é uma
-extensão oficial da Twitch nem da Facepunch.
-
 ## Registo e repouso
 
 - Botão direito no ícone → **Ver registo**: lista o que a extensão fez (canal, resgates, erros).
