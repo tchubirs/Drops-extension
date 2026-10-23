@@ -1,12 +1,11 @@
-// O que corre por tras. Clicas no icone e ela faz o resto, de 2 em 2 minutos:
-//   - separador 1, o INVENTARIO (twitch.tv/drops/inventory): fica sempre aberto; e daqui
-//     que ela le o teu progresso, e e aqui que tu resgatas os drops prontos;
-//   - separador 2, a STREAM: ela poe-no no canal certo, carrega no play se o video
-//     parar, aceita o aviso "+18", e muda de canal quando o canal acaba, deixa de dar
-//     drops, ou os minutos param de subir durante 8 minutos.
-// Resgata sozinha os drops a 100% (pela consulta da Twitch, ou carregando no botao do
-// inventario). Quando todos os drops estao a 100%, mostra FIM.
+// O que corre por tras. Clicas no icone e ela faz o resto, de 2 em 2 minutos, numa aba so,
+// a da STREAM (sem som e na qualidade mais baixa, para gastar o minimo de internet e PC):
+// poe-na no canal certo, carrega no play se o video parar, aceita o aviso "+18", e muda
+// de canal quando o canal acaba, deixa de dar drops, ou os minutos param de subir 8 min.
+// Resgata sozinha os drops a 100% (pela consulta da Twitch; se falhar, abre o inventario
+// so para carregar no botao e fecha-o). O icone mostra a skin que esta a farmar.
 // Usa a tua sessao da Twitch deste Chrome (cookie "auth-token"); nao ve a password.
+import './textos.js';
 import { criarGql, decidir, acompanhar, aplicarConfig, resgatar, prontosParaResgatar, WEB } from './logica.js';
 
 const CONFIG_URL = 'https://raw.githubusercontent.com/tchubirs/Drops-extension/main/config.json';
@@ -14,24 +13,44 @@ const CONFIG_HORAS = 6;
 
 const INVENTARIO = 'https://www.twitch.tv/drops/inventory';
 const PARADO_MIN = 8, EVITAR_MIN = 30;
-const guardado = () => chrome.storage.local.get(['ligado', 'tabInv', 'tabStream', 'evitar', 'progresso', 'recarregado', 'config', 'configQuando', 'vistosProntos', 'botaoQuando', 'registo', 'ultimoErro']);
+const guardado = () => chrome.storage.local.get(['ligado', 'tabInv', 'tabStream', 'evitar', 'progresso', 'recarregado', 'config', 'configQuando', 'vistosProntos', 'botaoQuando', 'jogos', 'webhook', 'avisouLogin']);
 const mostrar = async (texto, cor, titulo) => {
   await chrome.action.setBadgeText({ text: texto });
   if (cor) await chrome.action.setBadgeBackgroundColor({ color: cor });
   if (titulo) await chrome.action.setTitle({ title: titulo.slice(0, 2000) });
 };
+const dormir = ms => new Promise(ok => setTimeout(ok, ms));
 // registo visivel (menu do icone -> "Ver registo"): so o que a extensao fez, guardado neste Chrome
 const registar = async texto => {
   const { registo = [] } = await chrome.storage.local.get('registo');
   registo.push({ t: Date.now(), texto });
   await chrome.storage.local.set({ registo: registo.slice(-100) });
 };
-// modo repouso: sem campanha activa, verifica de hora a hora em vez de 2 em 2 minutos
+// modo repouso: sem campanha activa nos jogos escolhidos, verifica de hora a hora em vez de 2 em 2 min
 const periodo = async min => {
   const a = await chrome.alarms.get('drops');
-  if (!a || a.periodInMinutes !== min) { await chrome.alarms.create('drops', { periodInMinutes: min }); await registar(min > 2 ? 'sem campanha do Rust: modo repouso (verifico de hora a hora)' : 'campanha activa: verifico de 2 em 2 minutos'); }
+  if (!a || a.periodInMinutes !== min) { await chrome.alarms.create('drops', { periodInMinutes: min }); await registar(min > 2 ? T.repouso : T.ativo); }
 };
-const dormir = ms => new Promise(ok => setTimeout(ok, ms));
+// o que o painel (painel.html) mostra: le-o do storage e actualiza-se sozinho
+const pct = x => x.resgatado ? 100 : Math.min(100, Math.round(100 * x.minutos / (x.precisa || 1)));
+// minutos que faltam: os drops sobem todos ao mesmo tempo, por isso o total e o maior que falta
+const falta = x => x.resgatado || x.feito ? 0 : Math.max(0, (x.precisa || 0) - (x.minutos || 0));
+const faltaTotal = d => Math.max(0, ...d.campanhas.flatMap(c => c.drops).filter(x => x.activo !== false).map(falta));
+const guardarEstado = (d, extra = {}) => chrome.storage.local.set({ estado: {
+  quando: Date.now(), canal: d && d.canal || null, feitos: d ? d.feitos : 0, total: d ? d.total : 0,
+  faltaTotal: d ? faltaTotal(d) : 0,
+  campanhas: d ? d.campanhas.map(c => ({ nome: c.nome, drops: c.drops.map(x => ({ nome: curto(x.nome, c.nome), imagem: x.imagem, pct: pct(x), falta: falta(x), resgatado: x.resgatado, pronto: x.pronto })) })) : [],
+  semLigacao: d ? d.semLigacao : [], jogos: d ? d.jogos : [], ...extra } });
+
+// avisos no Discord (e por ele no celular): so se a pessoa colar o webhook dela no painel.
+// Vai como formulario, que o Discord aceita sem permissao extra da extensao.
+async function avisar(texto) {
+  const { webhook } = await chrome.storage.local.get('webhook');
+  if (!/^https:\/\/(canary\.|ptb\.)?discord(app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(webhook || '')) return;
+  const f = new FormData();
+  f.append('payload_json', JSON.stringify({ username: NOME, content: texto }));
+  await fetch(webhook, { method: 'POST', mode: 'no-cors', body: f }).catch(() => {});
+}
 
 // a sessao da Twitch deste Chrome
 async function sessao() {
@@ -52,9 +71,9 @@ async function separador(id, url, activo) {
   return chrome.tabs.get(tab.id);
 }
 
-// as consultas vao de dentro do separador do inventario, com os mesmos cabecalhos que a
-// propria pagina usa (o "Client-Integrity" que ela gera; guardado por cabecalhos-twitch.js)
-function pedirPeloInventario(tabId, token) {
+// as consultas vao de dentro da aba da stream, com os mesmos cabecalhos que a propria
+// pagina usa (o "Client-Integrity" que ela gera; guardado por cabecalhos-twitch.js)
+function pedirPelaAba(tabId, token) {
   return async corpo => {
     for (let tentativa = 0; ; tentativa++) {
       let r;
@@ -82,31 +101,61 @@ function pedirPeloInventario(tabId, token) {
   };
 }
 
-// se o resgate pela consulta falhar: carregar nos botoes "Resgatar" do separador do inventario
-async function resgatarNaPagina(tabId) {
-  await chrome.tabs.reload(tabId); await dormir(8000);
-  return chrome.scripting.executeScript({ target: { tabId }, func: () => {
+// se o resgate pela consulta falhar: abrir o inventario em segundo plano, carregar nos
+// botoes "Resgatar" e fechar
+async function resgatarNaPagina() {
+  const tab = await chrome.tabs.create({ url: INVENTARIO, active: false });
+  await chrome.tabs.update(tab.id, { muted: true }).catch(() => {});
+  await dormir(9000);
+  const n = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => {
     const botoes = [...document.querySelectorAll('button')].filter(b =>
       /claim-button/i.test(b.getAttribute('data-test-selector') || '') ||
       /^(resgatar|resgatar agora|reivindicar|reclamar|obter|claim|claim now)$/i.test(b.textContent.trim()));
     botoes.forEach(b => b.click());
     return botoes.length;
   } }).then(r => (r[0] && r[0].result) || 0).catch(() => 0);
+  await dormir(3000);
+  await chrome.tabs.remove(tab.id).catch(() => {});
+  return n;
 }
 
-// manter a stream a correr: aceitar o aviso +18 e carregar no play
+// manter a stream a correr: aceitar o aviso +18, carregar no play, sem som e na qualidade
+// mais baixa (uma vez por canal; a escolha de qualidade nao fica guardada para as tuas
+// outras abas da Twitch)
 async function manterAVer(tabId) {
-  return chrome.scripting.executeScript({ target: { tabId }, func: () => {
-    const botoes = [...document.querySelectorAll('button')];
-    for (const b of botoes) {
+  await chrome.tabs.update(tabId, { muted: true }).catch(() => {});
+  return chrome.scripting.executeScript({ target: { tabId }, func: async () => {
+    const espera = ms => new Promise(ok => setTimeout(ok, ms));
+    for (const b of document.querySelectorAll('button')) {
       const alvo = b.getAttribute('data-a-target') || '';
       if (/mature-accept|start-watching/i.test(alvo) || /^(start watching|começar a assistir|comecar a assistir|iniciar transmissão)$/i.test(b.textContent.trim())) b.click();
     }
     const v = document.querySelector('video');
-    if (v && v.paused) v.play().catch(() => {});
+    if (v) { v.muted = true; if (v.paused) v.play().catch(() => {}); }
+    if (v && window.__dropsQualidade !== location.pathname) {
+      const antes = localStorage.getItem('video-quality');
+      const menu = document.querySelector('[data-a-target="player-settings-button"]');
+      if (menu) {
+        menu.click(); await espera(400);
+        const q = document.querySelector('[data-a-target="player-settings-menu-item-quality"]');
+        if (q) {
+          q.click(); await espera(400);
+          const opcoes = [...document.querySelectorAll('input[name="player-settings-submenu-quality-option"]')];
+          const menor = opcoes[opcoes.length - 1];
+          if (menor) { (menor.closest('label') || menor).click(); window.__dropsQualidade = location.pathname; }
+        }
+        await espera(300);
+        if (document.querySelector('[data-a-target="player-settings-menu"]')) menu.click();
+        setTimeout(() => { if (antes === null) localStorage.removeItem('video-quality'); else localStorage.setItem('video-quality', antes); }, 2000);
+      }
+    }
     return { video: !!v, parado: v ? v.paused : null };
   } }).then(r => r[0] && r[0].result).catch(() => null);
 }
+
+// o icone e sempre a logo (versoes de teste trocavam-no pela skin)
+const iconeNormal = () => chrome.action.setIcon({ path: 'icone.png' }).catch(() => {});
+iconeNormal();
 
 let aCorrer = false;
 // a auto-correcao: busca os codigos da Twitch online (com a copia guardada, ou a de
@@ -132,13 +181,18 @@ async function passo() {
     const agora = Date.now();
     const evitar = Object.fromEntries(Object.entries(g.evitar || {}).filter(([, ate]) => ate > agora));
     const s = await sessao();
-    const inv = await separador(g.tabInv, INVENTARIO, false);
-    // o inventario recarrega-se de 10 em 10 min, para veres o progresso actualizado
-    if (agora - (g.recarregado || 0) > 10 * 60000) { await chrome.tabs.reload(inv.id); await dormir(5000); g.recarregado = agora; }
+    // versoes antigas deixavam a aba do inventario aberta: ja nao e precisa
+    if (g.tabInv) {
+      const velha = await chrome.tabs.get(g.tabInv).catch(() => null);
+      if (velha && /twitch\.tv\/drops\/inventory/.test(velha.url || '')) await chrome.tabs.remove(velha.id).catch(() => {});
+      await chrome.storage.local.set({ tabInv: null });
+    }
     const stream = await separador(g.tabStream, 'https://www.twitch.tv/directory/category/rust', false);
-    await chrome.storage.local.set({ tabInv: inv.id, tabStream: stream.id, recarregado: g.recarregado || 0 });
-    const gql = criarGql(pedirPeloInventario(inv.id, s.token));
-    const d = await decidir({ gql, utilizador: s.utilizador, urlAtual: stream.url, evitar: Object.keys(evitar) });
+    await chrome.tabs.update(stream.id, { muted: true }).catch(() => {});
+    await chrome.storage.local.set({ tabStream: stream.id });
+    const gql = criarGql(pedirPelaAba(stream.id, s.token));
+    const d = await decidir({ gql, utilizador: s.utilizador, urlAtual: stream.url, evitar: Object.keys(evitar), jogos: Array.isArray(g.jogos) ? g.jogos : null });
+    if (g.avisouLogin) await chrome.storage.local.set({ avisouLogin: false });
 
     // os minutos estao a subir? (se o canal ficar 8 min parado, muda)
     // resgatar sozinha o que chegou a 100%
@@ -153,74 +207,104 @@ async function passo() {
       // o botao do inventario so como plano B, e no maximo uma vez a cada 10 min
       if (r.falharam.length && agora - (g.botaoQuando || 0) > 10 * 60000) {
         await chrome.storage.local.set({ botaoQuando: agora });
-        if (await resgatarNaPagina(inv.id) > 0) resgatados = resgatados.concat(r.falharam);
+        if (await resgatarNaPagina() > 0) resgatados = resgatados.concat(r.falharam);
       }
       if (resgatados.length) {
         for (const x of resgatados) { x.resgatado = true; x.pronto = false; }
+        const ids = new Set(resgatados.map(x => x.id));
+        for (const c of d.campanhas) for (const x of c.drops) if (ids.has(x.id)) { x.resgatado = true; x.pronto = false; x.feito = true; }
         d.prontos = d.prontos.filter(x => !resgatados.includes(x));
-        await chrome.tabs.reload(inv.id);
-        chrome.notifications.create({ type: 'basic', iconUrl: 'icone.png', title: 'Drops do Rust', message: `Resgatado: ${resgatados.map(x => x.nome).join(', ')}` });
+        chrome.notifications.create({ type: 'basic', iconUrl: 'icone.png', title: NOME, message: `🎁 ${T.resgatado}: ${resgatados.map(x => curto(x.nome, x.campanha || '')).join(', ')}` });
+        avisar(`🎁 ${T.resgatado}: ${resgatados.map(x => curto(x.nome, x.campanha || '')).join(', ')}`);
       }
     }
     await periodo(d.campanhas.length ? 2 : 60);
-    if (resgatados.length) await registar(`resgatado: ${resgatados.map(x => x.nome).join(', ')}`);
-    if (d.ir) await registar(`mudei para o canal ${d.ir.split('/').pop()}`);
+    if (resgatados.length) await registar(`🎁 ${T.resgatado}: ${resgatados.map(x => curto(x.nome, x.campanha || '')).join(', ')}`);
+    if (d.ir) await registar(`▶ ${T.assistindo} ${d.ir.split('/').pop()}`);
     await chrome.storage.local.set({ ultimoErro: '' });
     const { prog, parado } = acompanhar(g.progresso, d, agora, PARADO_MIN);
-    if (parado) { await registar(`${d.canal}: minutos parados ha ${PARADO_MIN} min, vou evitar este canal`); evitar[d.canal] = agora + EVITAR_MIN * 60000; d.aviso = `${d.canal}: os minutos nao sobem ha ${PARADO_MIN} min, mudo de canal daqui a 2 min`; }
+    if (parado) { await registar(`↻ ${d.canal}: ${T.trocando}`); evitar[d.canal] = agora + EVITAR_MIN * 60000; d.aviso = `${d.canal}: os minutos nao sobem ha ${PARADO_MIN} min, mudo de canal daqui a 2 min`; }
     await chrome.storage.local.set({ evitar, progresso: prog });
-
-    const linhas = d.campanhas.map(c => `${c.nome}${c.canais ? ` (${c.canais.slice(0, 3).join(', ')})` : ''}: ` +
-      c.drops.map(x => `${x.nome} ${x.resgatado ? 100 : Math.min(100, Math.round(100 * x.minutos / (x.precisa || 1)))}%${x.resgatado ? ' ✔' : x.pronto ? ' 🎁' : x.bloqueado ? ' 🔒' : ''}`).join(', ')).join('\n');
-    const avisos = [
-      resgatados.length ? `🎁 resgatado agora: ${resgatados.map(x => x.nome).join(', ')}` : '',
-      d.prontos.length ? `🎁 pronto, resgato daqui a ~30 s: ${d.prontos.map(x => x.nome).join(', ')}` : '',
-      d.semLigacao.length ? `⚠ a Twitch diz que a conta nao esta ligada em: ${d.semLigacao.join(', ')} (twitch.facepunch.com/connect)` : '',
-    ].filter(Boolean).join('\n');
 
     // (so acaba quando ja nao ha nada por resgatar)
     if (d.fim && !d.prontos.length) {
       await chrome.storage.local.set({ ligado: false });
-      await registar(`fim: ${d.total}/${d.total} drops a 100%`);
-      await mostrar('FIM', '#1f7a3d', `Drops: todos a 100% (${d.total}/${d.total}).\n${avisos}\nConfirma no inventario que estao resgatados e liga a Twitch a Steam (twitch.facepunch.com/connect).`);
-      chrome.notifications.create({ type: 'basic', iconUrl: 'icone.png', title: 'Drops do Rust: acabou',
-        message: `Os ${d.total} drops estao a 100%. Confirma no inventario e liga a Twitch a Steam.` });
+      await guardarEstado(d, { fim: true });
+      await registar(`🎉 ${T.fim}`);
+      await iconeNormal();
+      await mostrar('✓', '#1f7a3d', titulo(d, [`🎉  ${T.fim}`]));
+      chrome.notifications.create({ type: 'basic', iconUrl: 'icone.png', title: NOME, message: `🎉 ${T.fim}` });
+      avisar(`🎉 ${T.fim}`);
       return;
     }
     if (d.ir) { await chrome.tabs.update(stream.id, { url: d.ir }); await dormir(8000); }
-    const video = d.canal ? await manterAVer(stream.id) : null;
-    const cor = d.prontos.length ? '#9146ff' : '#1f7a3d';
-    if (d.canal) await mostrar(`${d.feitos}/${d.total}`, cor, `Drops: a ver ${d.canal} (${d.alvo.join(', ')})${video && video.parado ? ' — o video esta parado: carrega no play' : ''}\n${d.aviso ? d.aviso + '\n' : ''}${avisos ? avisos + '\n' : ''}${linhas}`);
-    else await mostrar('...', '#8a5a00', `Drops: ${d.aviso || 'a espera'}\n${avisos ? avisos + '\n' : ''}${linhas}`);
+    if (d.canal) await manterAVer(stream.id);
+    await guardarEstado(d, { procurando: !d.canal, parado, resgatados: resgatados.map(x => curto(x.nome, x.campanha || '')) });
+    const so = x => x.map(y => curto(y.nome, y.campanha || '')).join(', ');
+    const status = [
+      parado ? `↻  ${T.trocando}` : d.canal ? `▶  ${T.assistindo} ${d.canal}` : !d.campanhas.length ? T.nenhum :
+        d.bloqueados.length && !d.prontos.length ? `🔒  ${T.anterior}` : `⏳  ${T.procurando}`,
+      resgatados.length ? `🎁  ${T.resgatado}: ${so(resgatados)}` : '',
+      d.prontos.length ? `🎁  ${T.resgatando}: ${so(d.prontos)}` : '',
+      d.semLigacao.length ? `🔗  ${T.steam} twitch.facepunch.com/connect` : '',
+    ];
+    // o selo do Chrome so mostra ~4 caracteres: "2/6" cabe; "20/21" nao, e vira "20✓"
+    const selo = `${d.feitos}/${d.total}`.length <= 4 ? `${d.feitos}/${d.total}` : `${d.feitos}✓`;
+    await mostrar(d.canal ? selo : '…', d.prontos.length ? '#9146ff' : d.canal ? '#1f7a3d' : '#53535f', titulo(d, status));
   } catch (e) {
-    await mostrar('!', '#b3261e', `Drops: erro (${e.message})`);
+    const login = /entra|login|sessao/i.test(e.message);
     const { ultimoErro } = await chrome.storage.local.get('ultimoErro');
-    if (ultimoErro !== e.message) { await registar(`erro: ${e.message}`); await chrome.storage.local.set({ ultimoErro: e.message }); }
+    if (ultimoErro !== e.message) { await registar(`⚠️ ${e.message}`); await chrome.storage.local.set({ ultimoErro: e.message }); }
+    if (login) { const { avisouLogin } = await chrome.storage.local.get('avisouLogin'); if (!avisouLogin) { await chrome.storage.local.set({ avisouLogin: true }); avisar(`⚠️ ${T.login}`); } }
+    await mostrar('…', '#53535f', `${NOME}\n${login ? T.login : T.reconectando}`);
+    await chrome.storage.local.set({ estado: { quando: Date.now(), erro: login ? 'login' : 'tentar' } });
   } finally { aCorrer = false; }
 }
 
-chrome.action.onClicked.addListener(async () => {
+// o texto que aparece ao passar o rato no icone
+const barra = p => '▰'.repeat(Math.round(p / 10)) + '▱'.repeat(10 - Math.round(p / 10));
+// "Twitch Rivals Spooky Rug" na campanha "Twitch Rivals BI Generals" -> "Spooky Rug"
+function curto(nome, campanha) {
+  const a = String(nome).split(' '), b = String(campanha).split(' ');
+  let i = 0;
+  while (i < a.length - 1 && a[i] === b[i]) i++;
+  return a.slice(i).join(' ');
+}
+function titulo(d, status) {
+  const corpo = d.campanhas.map(c => [c.nome, ...c.drops.map(x => {
+    const p = pct(x), nome = curto(x.nome, c.nome);
+    return x.resgatado ? `   ✓  ${nome}` : `   ${barra(p)}  ${p}%  ${nome}${falta(x) ? `  (${tempo(falta(x))})` : ''}`;
+  })].join('\n')).join('\n\n');
+  return [`${NOME}  ·  ${d.feitos} ${T.de} ${d.total} ✓${faltaTotal(d) ? `  ·  ⏱ ${tempo(faltaTotal(d))}` : ''}`, ...status.filter(Boolean), '', corpo].join('\n');
+}
+
+async function alternar() {
   const { ligado } = await guardado();
-  await chrome.storage.local.set({ ligado: !ligado, evitar: {}, progresso: {} });
-  await registar(ligado ? 'desligado por ti' : 'ligado por ti');
+  await chrome.storage.local.set({ ligado: !ligado, evitar: {}, progresso: {}, estado: { quando: Date.now(), comecando: !ligado } });
+  await registar(ligado ? T.pausado : T.ligar);
   if (!ligado) await chrome.alarms.create('drops', { periodInMinutes: 2 });
-  if (ligado) await mostrar('', null, 'Drops: desligado (clica para ligar)');
-  else { await mostrar('...', '#8a5a00', 'Drops: a comecar (abre o inventario e a stream)'); passo(); }
+  if (ligado) { await iconeNormal(); await mostrar('', null, `${NOME}\n${T.pausado}`); }
+  else { await mostrar('…', '#53535f', `${NOME}\n${T.comecando}`); passo(); }
+  return !ligado;
+}
+// ligar/pausar vem do botao da janelinha (painel.html)
+chrome.runtime.onMessage.addListener((m, _de, responder) => {
+  if (m && m.tipo === 'alternar') { alternar().then(ligado => responder({ ligado })); return true; }
+  if (m && m.tipo === 'agora') { passo(); responder({}); }
 });
 chrome.alarms.get('drops').then(a => { if (!a) chrome.alarms.create('drops', { periodInMinutes: 2 }); });
 chrome.alarms.onAlarm.addListener(a => { if (a.name === 'drops' || a.name === 'resgate') passo(); });
-chrome.runtime.onStartup.addListener(passo);
 
-// menu do icone (botao direito): a pagina de ajuda e privacidade
+// menu do icone (botao direito): a pagina de ajuda e privacidade, e o registo
 const AJUDA = 'https://tchubirs.github.io/drops/';
 async function menu() {
   await chrome.contextMenus.removeAll();
-  chrome.contextMenus.create({ id: 'ajuda', title: 'Como funciona e privacidade', contexts: ['action'] });
-  chrome.contextMenus.create({ id: 'registo', title: 'Ver registo', contexts: ['action'] });
+  chrome.contextMenus.create({ id: 'ajuda', title: T.menuAjuda, contexts: ['action'] });
+  chrome.contextMenus.create({ id: 'registo', title: T.menuRegisto, contexts: ['action'] });
 }
 chrome.contextMenus.onClicked.addListener(i => {
   if (i.menuItemId === 'ajuda') chrome.tabs.create({ url: AJUDA });
   if (i.menuItemId === 'registo') chrome.tabs.create({ url: chrome.runtime.getURL('registo.html') });
 });
-chrome.runtime.onInstalled.addListener(menu);
-chrome.runtime.onStartup.addListener(menu);
+chrome.runtime.onStartup.addListener(() => { menu(); passo(); });
+chrome.runtime.onInstalled.addListener(() => { menu(); passo(); });

@@ -1,37 +1,41 @@
-# Drops Auto-Claim
+# DropGo
 
-Extensão do Chrome para os drops da Twitch (Rust). Tu clicas no ícone; ela faz o resto:
-vê o canal certo, resgata os drops a 100% e passa ao próximo até estarem todos.
+Seus drops da Twitch no piloto automático. Clique no ícone, depois em **Ligar**:
+o DropGo escolhe uma live que dá o drop (primeiro os exclusivos de um canal), deixa
+a live numa aba sem som e na menor qualidade, mostra o progresso de cada item e
+resgata quando chega a 100%. Funciona com Rust e com outros jogos que você escolher.
 
-## Registo e repouso
+## O que aparece
 
-- Botão direito no ícone → **Ver registo**: lista o que a extensão fez (canal, resgates, erros).
-- Sem campanha do Rust ativa, ela verifica de hora a hora em vez de 2 em 2 minutos.
-- O `config.json` só pode trocar os códigos (hashes) das 7 consultas conhecidas.
+- **Janelinha (clique no ícone):** a miniatura de cada skin, a %, o tempo que falta,
+  o total e o botão Ligar/Pausar. Também: escolha de jogos e avisos no Discord (webhook).
+- **Botão direito no ícone:** "Como funciona e privacidade" e "Ver histórico"
+  (o que a extensão fez, guardado só no seu Chrome).
+- **Idioma:** português, espanhol ou inglês, pela língua do Chrome.
+- Sem drops ativos nos jogos escolhidos, ela confere de hora em hora em vez de a cada 2 minutos.
 
 ## Instalar (uma vez)
 
-1. Carrega em **Code → Download ZIP** (nesta página) e descomprime numa pasta fixa,
-   por exemplo `Documentos\drops-extensao`.
-2. No Chrome, abre `chrome://extensions` e liga **Modo de programador**.
-3. **Carregar sem compactação** → escolhe essa pasta.
-4. Fixa o ícone (peça de puzzle → pionés) e clica nele.
+1. **Code → Download ZIP** (nesta página) e descompacte numa pasta fixa.
+2. No Chrome, abra `chrome://extensions` e ligue o **Modo do desenvolvedor**.
+3. **Carregar sem compactação** → escolha essa pasta.
+4. Fixe o ícone (peça de quebra-cabeça → alfinete).
 
-## Atualizar (sem reinstalar, sem perder nada)
+## Atualizar
 
-1. Descarrega o ZIP outra vez e **substitui** os ficheiros na mesma pasta.
-2. Em `chrome://extensions`, carrega no **↻** da "Drops Auto-Claim".
+Baixe o ZIP de novo, substitua os arquivos na mesma pasta e clique em **↻** no DropGo
+em `chrome://extensions`. O `config.json` (códigos das consultas da Twitch e o espaço
+patrocinado) atualiza sozinho a cada 6 horas; ele só pode trocar os códigos das 7
+consultas conhecidas e nunca contém código.
 
-Os códigos da Twitch e os tempos do resgate (`config.json`) atualizam-se sozinhos a
-cada 6 horas; só código novo precisa destes 2 passos.
+## Arquivos
 
-## Ficheiros
-
-- `manifest.json`, `fundo.js`, `logica.js`, `cabecalhos-twitch.js`, `registo.html`, `registo.js`, `icone.png` — a extensão.
-- `config.json` — códigos das consultas da Twitch e tempos (a extensão lê-o daqui).
-- `logica.test.mjs` — testes (`node logica.test.mjs`).
+- `manifest.json`, `fundo.js`, `logica.js`, `cabecalhos-twitch.js`, `textos.js`,
+  `painel.html/js`, `registo.html/js`, `_locales/`, `icone.png`: a extensão.
+- `config.json`: códigos das consultas da Twitch, tempos do resgate e espaço patrocinado.
+- `loja/`: material da versão 3.10 para a Chrome Web Store (histórico; a 3.10 tem a tag `v3.10`).
 
 As consultas à Twitch e as regras de "este drop conta agora" vêm do TwitchDropsMiner
-(DevilXD, licença MIT), reescritas em JavaScript para correrem no Chrome.
-- `loja/` — tudo para a Chrome Web Store: o pacote `drops-extensao-3.10.zip`, as imagens e
-  os textos a colar (`loja/LEIA-ME.md`). Página e privacidade: https://tchubirs.github.io/drops/
+(DevilXD, licença MIT), reescritas em JavaScript para rodar no Chrome.
+
+Página e privacidade: https://tchubirs.github.io/drops/ · Projeto independente, não afiliado à Twitch.

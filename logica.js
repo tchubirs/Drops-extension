@@ -26,7 +26,7 @@ export let CONSULTAS = {
 const OPERACOES = Object.fromEntries(Object.entries(CONSULTAS).map(([k, v]) => [k, v[0]]));
 
 // Substituir os codigos por uma config vinda de fora (a auto-correcao). So aceita se
-// tiver as 6 consultas certas, cada uma com nome e um hash de 64 caracteres; senao,
+// tiver as 7 consultas certas, cada uma com o nome fixo e um hash de 64 caracteres; senao,
 // ficam os que a extensao ja tinha. Devolve true se aplicou.
 export function aplicarConfig(cfg) {
   if (!cfg || typeof cfg !== 'object') return false;
@@ -57,7 +57,12 @@ export function criarGql(pedir) {
   };
 }
 
-const doJogo = g => !!g && [g.slug, g.name, g.displayName].filter(Boolean).some(x => x.toLowerCase() === JOGO.slug || x === JOGO.nome);
+// jogos: o mesmo jogo escrito de varias formas (slug, nome, nome visivel)
+const nomesDo = g => [g && g.slug, g && g.name, g && g.displayName].filter(Boolean).map(x => String(x).toLowerCase());
+const mesmoJogo = (a, b) => { const x = nomesDo(a); return nomesDo(b).some(n => x.includes(n)); };
+// "Counter-Strike 2" -> "counter-strike-2" (o endereco do diretorio da Twitch), se a Twitch nao der o slug
+const slugDe = g => String((g && g.slug) || String((g && (g.displayName || g.name)) || '').toLowerCase()
+  .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’'":]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
 const dentro = (agora, ini, fim) => (!ini || Date.parse(ini) <= agora) && (!fim || agora < Date.parse(fim));
 
 // o canal que um endereco da Twitch mostra (twitch.tv/<canal>), ou null
@@ -67,12 +72,23 @@ export function canalDe(url) {
   return m && !reservados.includes(m[2].toLowerCase()) ? m[2].toLowerCase() : null;
 }
 
-// As campanhas do Rust com o teu progresso. Cada drop:
-//   { id, nome, minutos, precisa, resgatado, pronto (100% e por resgatar), feito (100%),
-//     bloqueado (falta resgatar um anterior), activo (dentro da janela), porVer }
-export async function campanhas(gql, utilizador, agora = Date.now()) {
+// As campanhas dos jogos escolhidos com o teu progresso. `jogos` = lista de slugs; se for
+// null, so o Rust (os outros escolhem-se no painel).
+// Devolve { lista, jogos } (jogos = todos os que tem drops agora, para o painel escolher).
+// Cada drop: { id, nome, minutos, precisa, resgatado, pronto (100% e por resgatar), feito (100%),
+//   bloqueado (falta resgatar um anterior), activo (dentro da janela), porVer }
+export async function campanhas(gql, utilizador, agora = Date.now(), jogos = null) {
   const todas = ((await gql('campanhas', { fetchRewardCampaigns: false })).currentUser || {}).dropCampaigns || [];
-  const doRust = todas.filter(c => c.status === 'ACTIVE' && doJogo(c.game));
+  const ativas = todas.filter(c => c.status === 'ACTIVE' && c.game && slugDe(c.game));
+  const disponiveis = [];
+  for (const c of ativas) {
+    const slug = slugDe(c.game), ligada = !!(c.self && c.self.isAccountConnected);
+    const j = disponiveis.find(x => x.slug === slug);
+    if (j) j.ligada = j.ligada || ligada;
+    else disponiveis.push({ slug, nome: c.game.displayName || c.game.name || slug, ligada });
+  }
+  const escolhidos = new Set(jogos || [JOGO.slug]);
+  const doRust = ativas.filter(c => escolhidos.has(slugDe(c.game)));
   const inv = ((await gql('inventario', { fetchRewardCampaigns: false })).currentUser || {}).inventory || {};
   const meu = {};
   for (const c of inv.dropCampaignsInProgress || []) for (const d of c.timeBasedDrops || []) if (d.self) meu[d.id] = d.self;
@@ -84,12 +100,14 @@ export async function campanhas(gql, utilizador, agora = Date.now()) {
     const a = det.allow;
     const canais = a && a.isEnabled !== false && a.channels && a.channels.length ? a.channels.map(x => String(x.name || x.login).toLowerCase()) : null;
     const eu = det.self || c.self || {};
-    const drops = (det.timeBasedDrops || []).map(d => {
+    // drops so para quem e inscrito no canal: ficam de fora (senao ficava preso nelas)
+    const drops = (det.timeBasedDrops || []).filter(d => !(d.requiredSubs > 0)).map(d => {
       const s = meu[d.id] || d.self || {};
       const beneficios = (d.benefitEdges || []).map(b => b.benefit && b.benefit.id).filter(Boolean);
       const resgatado = !!s.isClaimed || (beneficios.length > 0 && beneficios.every(b => ganhos.has(b)));
       const minutos = s.currentMinutesWatched || 0, precisa = d.requiredMinutesWatched || 0;
       return { id: d.id, nome: d.name || ((d.benefitEdges || [])[0] || {}).benefit?.name || 'drop', minutos, precisa, resgatado,
+        imagem: ((d.benefitEdges || [])[0] || {}).benefit?.imageAssetURL || null,
         pronto: !resgatado && precisa > 0 && minutos >= precisa, feito: resgatado || minutos >= precisa, instancia: s.dropInstanceID || null,
         activo: dentro(agora, d.startAt || det.startAt, d.endAt || det.endAt),
         pre: (d.preconditionDrops || []).map(p => p.id), beneficios: beneficios.length };
@@ -100,9 +118,11 @@ export async function campanhas(gql, utilizador, agora = Date.now()) {
       const temSentido = d.beneficios > 0 || drops.some(x => x.pre.includes(d.id));
       d.porVer = !d.feito && d.activo && !d.bloqueado && d.precisa > 0 && temSentido;
     }
-    out.push({ id: c.id, nome: det.name || c.name, canais, ligada: eu.isAccountConnected !== false, drops });
+    if (!drops.length) continue;
+    out.push({ id: c.id, nome: det.name || c.name, canais, ligada: eu.isAccountConnected !== false, drops,
+      jogo: { slug: slugDe(c.game), nome: c.game.displayName || c.game.name || slugDe(c.game), name: c.game.name, displayName: c.game.displayName } });
   }
-  return out;
+  return { lista: out, jogos: disponiveis.map(j => ({ ...j, ativo: escolhidos.has(j.slug) })) };
 }
 
 // o resumo: o que falta ver, o que esta pronto a resgatar, o que espera por um resgate
@@ -115,16 +135,22 @@ export function plano(lista) {
 }
 
 // um canal: esta ao vivo no Rust? que campanhas (das que queremos) se ganham la?
+// Um canal que esta na lista da propria campanha (drop exclusivo) conta sempre que esteja
+// ao vivo no jogo. As gerais confirmam-se com a Twitch ("que campanhas se ganham aqui?");
+// se ela nao responder ou vier vazia, contam (a lista do diretorio ja filtra drops ligados).
 export async function campanhasNoCanal(gql, login, queremos) {
   const u = (await gql('canal', { channel: login })).user;
-  if (!u || !u.stream || !doJogo(u.broadcastSettings && u.broadcastSettings.game)) return [];
-  const ch = (await gql('disponiveis', { channelID: String(u.id) })).channel;
+  const g = u && u.broadcastSettings && u.broadcastSettings.game;
+  if (!u || !u.stream || !g) return [];
+  const daqui = queremos.filter(c => mesmoJogo(c.jogo, g) && (!c.canais || c.canais.includes(login)));
+  if (!daqui.length) return [];
+  const ch = await gql('disponiveis', { channelID: String(u.id) }).then(r => r.channel).catch(() => null);
   const ids = new Set(((ch && ch.viewerDropCampaigns) || []).map(c => c.id));
-  return queremos.filter(c => ids.has(c.id) && (!c.canais || c.canais.includes(login)));
+  return daqui.filter(c => c.canais || !ids.size || ids.has(c.id));
 }
 
-async function candidatosDoDiretorio(gql, evitar) {
-  const d = await gql('diretorio', { limit: 30, slug: JOGO.slug, imageWidth: 50, includeCostreaming: false, sortTypeIsRecency: false,
+async function candidatosDoDiretorio(gql, evitar, slug) {
+  const d = await gql('diretorio', { limit: 30, slug, imageWidth: 50, includeCostreaming: false, sortTypeIsRecency: false,
     options: { broadcasterLanguages: [], freeformTags: null, includeRestricted: ['SUB_ONLY_LIVE'], recommendationsContext: { platform: 'web' },
       sort: 'VIEWER_COUNT', systemFilters: ['DROPS_ENABLED'], tags: [], requestID: 'JIRA-VXP-2397' } });
   return ((d.game && d.game.streams && d.game.streams.edges) || []).map(e => e.node).filter(n => n && n.broadcaster)
@@ -132,12 +158,12 @@ async function candidatosDoDiretorio(gql, evitar) {
 }
 
 // O passo todo: para onde vai o separador da stream (ir: null = fica), e o resumo.
-export async function decidir({ gql, utilizador, urlAtual, evitar = [], agora = Date.now() }) {
-  const lista = await campanhas(gql, utilizador, agora);
+export async function decidir({ gql, utilizador, urlAtual, evitar = [], agora = Date.now(), jogos = null }) {
+  const { lista, jogos: disponiveis } = await campanhas(gql, utilizador, agora, jogos);
   const p = plano(lista);
-  const base = { total: p.total, feitos: p.feitos, prontos: p.prontos, bloqueados: p.bloqueados, fim: p.fim, campanhas: lista,
+  const base = { total: p.total, feitos: p.feitos, prontos: p.prontos, bloqueados: p.bloqueados, fim: p.fim, campanhas: lista, jogos: disponiveis,
     semLigacao: lista.filter(c => !c.ligada && c.drops.some(d => d.porVer)).map(c => c.nome) };
-  if (!lista.length) return { ...base, ir: null, canal: null, aviso: 'nao ha campanhas de drops do Rust activas agora' };
+  if (!lista.length) return { ...base, ir: null, canal: null, aviso: 'nao ha campanhas de drops activas agora' };
   if (!p.porVer.length) return { ...base, ir: null, canal: null,
     aviso: p.bloqueados.length ? `resgata no inventario o drop anterior a "${p.bloqueados[0].nome}" para ele comecar` : null };
   const atual = canalDe(urlAtual);
@@ -146,19 +172,33 @@ export async function decidir({ gql, utilizador, urlAtual, evitar = [], agora = 
   // 1. ja estou num canal de um streamer com drop por fazer: fico
   if (aqui.some(c => c.canais)) return { ...base, ir: null, canal: atual, alvo: aqui.map(c => c.nome) };
   // 2. um streamer com drop por fazer ao vivo? vai para la (conta tambem para os gerais)
-  const vistos = new Set([atual]);
-  for (const c of deStreamer) for (const login of c.canais.slice(0, 10)) {
-    if (vistos.has(login) || evitar.includes(login)) continue;
-    vistos.add(login);
+  // (no maximo 15 canais por ciclo, para nao encher a Twitch de consultas; a cada ciclo a
+  //  lista roda, para os canais do fim tambem serem vistos)
+  const rodar = (lista, n) => { const i = lista.length ? Math.floor(agora / 120000) % lista.length : 0; return lista.slice(i).concat(lista.slice(0, i)).slice(0, n); };
+  const daLista = [...new Set(deStreamer.flatMap(c => c.canais))].filter(l => l !== atual && !evitar.includes(l));
+  for (const login of rodar(daLista, 15)) {
     const la = await campanhasNoCanal(gql, login, p.porVer);
     if (la.length) return { ...base, ir: `https://www.twitch.tv/${login}`, canal: login, alvo: la.map(x => x.nome), saiu: atual };
   }
-  // 3. os gerais: fico se o canal actual os da; senao, o primeiro do diretorio que os de
+  // 3. os gerais: fico se o canal actual os da; senao, jogo a jogo (primeiro o que tem mais
+  //    drops por fazer), o primeiro canal do diretorio desse jogo que os de
   if (gerais.length) {
     if (aqui.length) return { ...base, ir: null, canal: atual, alvo: aqui.map(c => c.nome) };
-    for (const login of (await candidatosDoDiretorio(gql, [...evitar, ...(atual ? [atual] : [])])).slice(0, 5)) {
-      const la = await campanhasNoCanal(gql, login, p.porVer);
-      if (la.length) return { ...base, ir: `https://www.twitch.tv/${login}`, canal: login, alvo: la.map(x => x.nome), saiu: atual };
+    const porJogo = {};
+    for (const c of gerais) (porJogo[c.jogo.slug] ||= []).push(c);
+    const falta = slug => porJogo[slug].reduce((n, c) => n + c.drops.filter(d => d.porVer).length, 0);
+    // o jogo com mais drops por fazer sempre; dos outros, 2 por ciclo, rodando
+    const [primeiro, ...resto] = Object.keys(porJogo).sort((a, b) => falta(b) - falta(a));
+    for (const slug of [primeiro, ...rodar(resto, 2)]) {
+      const doJogo = porJogo[slug];
+      const lista = await candidatosDoDiretorio(gql, evitar, slug).catch(() => []);
+      if (atual && lista.includes(atual)) return { ...base, ir: null, canal: atual, alvo: doJogo.map(c => c.nome) };
+      const outros = lista.filter(l => l !== atual);
+      for (const login of outros.slice(0, 5)) {
+        const la = await campanhasNoCanal(gql, login, p.porVer);
+        if (la.length) return { ...base, ir: `https://www.twitch.tv/${login}`, canal: login, alvo: la.map(x => x.nome), saiu: atual };
+      }
+      if (outros.length) return { ...base, ir: `https://www.twitch.tv/${outros[0]}`, canal: outros[0], alvo: doJogo.map(c => c.nome), saiu: atual };
     }
   }
   return { ...base, ir: null, canal: null, aviso: 'os canais que faltam estao offline; volto a ver daqui a 2 min' };
