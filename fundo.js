@@ -129,7 +129,7 @@ async function resgatarNaPagina() {
 
 // manter a stream a correr: carregar no play, sem som e na qualidade mais baixa (uma vez por
 // canal; a escolha de qualidade nao fica guardada para as tuas outras abas da Twitch). O aviso
-// "+18" so e aceite se a pessoa ligou essa opcao; senao devolve maduro: true e o canal e evitado.
+// "+18" e aceite por padrao; se a pessoa desligar a opcao, devolve maduro: true e o canal e evitado.
 async function manterAVer(tabId, aceitar18) {
   await chrome.tabs.update(tabId, { muted: true }).catch(() => {});
   return chrome.scripting.executeScript({ target: { tabId }, args: [!!aceitar18], func: async aceitar18 => {
@@ -313,7 +313,7 @@ async function passo() {
     } else if (nossa && canalDe(nossa.url)) await chrome.storage.local.set({ canalNosso: canalDe(nossa.url) });
     if (d.canal && nossa && !sua) {
       const { aceitar18 } = await chrome.storage.local.get('aceitar18');
-      const v = await manterAVer(nossa.id, aceitar18 === true);
+      const v = await manterAVer(nossa.id, aceitar18 !== false);
       // canal +18 sem a pessoa ter aceitado: evita-o e no proximo ciclo vai para outro
       if (v && v.maduro) { evitar[d.canal] = agora + EVITAR_MIN * 60000; await chrome.storage.local.set({ evitar }); await registar(`🔞 ${d.canal}: ${T.pulei18}`); }
     }

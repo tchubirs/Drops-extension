@@ -104,7 +104,7 @@ $('#webhook').onchange = async () => {
 };
 chrome.storage.local.get('avisoPc').then(({ avisoPc }) => { $('#avisoPc').checked = avisoPc !== false; });
 $('#avisoPcTxt').textContent = T.avisoPc;
-chrome.storage.local.get('aceitar18').then(({ aceitar18 }) => { $('#aceitar18').checked = aceitar18 === true; });
+chrome.storage.local.get('aceitar18').then(({ aceitar18 }) => { $('#aceitar18').checked = aceitar18 !== false; });
 $('#aceitar18Txt').textContent = T.aceitar18;
 $('#aceitar18').onchange = () => chrome.storage.local.set({ aceitar18: $('#aceitar18').checked });
 $('#avisoPc').onchange = () => chrome.storage.local.set({ avisoPc: $('#avisoPc').checked });
