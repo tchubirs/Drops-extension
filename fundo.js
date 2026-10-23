@@ -6,14 +6,15 @@
 // so para carregar no botao e fecha-o). O icone mostra a skin que esta a farmar.
 // Usa a tua sessao da Twitch deste Chrome (cookie "auth-token"); nao ve a password.
 import './textos.js';
-import { criarGql, decidir, acompanhar, aplicarConfig, resgatar, prontosParaResgatar, WEB } from './logica.js';
+import { criarGql, decidir, acompanhar, aplicarConfig, resgatar, prontosParaResgatar, canalDe, campanhasNoCanal, WEB } from './logica.js';
+const DIRETORIO = 'https://www.twitch.tv/directory/category/rust';
 
 const CONFIG_URL = 'https://raw.githubusercontent.com/tchubirs/Drops-extension/main/config.json';
 const CONFIG_HORAS = 6;
 
 const INVENTARIO = 'https://www.twitch.tv/drops/inventory';
 const PARADO_MIN = 8, EVITAR_MIN = 30;
-const guardado = () => chrome.storage.local.get(['ligado', 'tabInv', 'tabStream', 'evitar', 'progresso', 'recarregado', 'config', 'configQuando', 'vistosProntos', 'botaoQuando', 'jogos', 'webhook', 'avisouLogin']);
+const guardado = () => chrome.storage.local.get(['ligado', 'tabInv', 'tabStream', 'evitar', 'progresso', 'recarregado', 'config', 'configQuando', 'vistosProntos', 'botaoQuando', 'canalNosso', 'jogos', 'webhook', 'avisouLogin']);
 const mostrar = async (texto, cor, titulo) => {
   await chrome.action.setBadgeText({ text: texto });
   if (cor) await chrome.action.setBadgeBackgroundColor({ color: cor });
@@ -73,7 +74,8 @@ async function separador(id, url, activo) {
 
 // as consultas vao de dentro da aba da stream, com os mesmos cabecalhos que a propria
 // pagina usa (o "Client-Integrity" que ela gera; guardado por cabecalhos-twitch.js)
-function pedirPelaAba(tabId, token) {
+// (podeRecarregar = false quando a aba e da pessoa: nunca recarregamos a aba dela)
+function pedirPelaAba(tabId, token, podeRecarregar = true) {
   return async corpo => {
     for (let tentativa = 0; ; tentativa++) {
       let r;
@@ -94,7 +96,7 @@ function pedirPelaAba(tabId, token) {
       } catch (e) { if (tentativa >= 2) throw e; await dormir(3000); continue; }   // a pagina podia estar a carregar
       // verificacao em falta ou caducada: recarregar o inventario (a pagina gera outra) e tentar de novo
       const falhou = r && r.corpo && JSON.stringify(r.corpo.errors || '').includes('IntegrityCheckFailed');
-      if (falhou && tentativa < 2) { await chrome.tabs.reload(tabId); await dormir(8000); continue; }
+      if (falhou && tentativa < 2 && podeRecarregar) { await chrome.tabs.reload(tabId); await dormir(8000); continue; }
       if (falhou) throw new Error('a Twitch recusou a verificacao (Client-Integrity). Recarrega o separador do inventario e espera 2 min');
       return r;
     }
@@ -187,11 +189,46 @@ async function passo() {
       if (velha && /twitch\.tv\/drops\/inventory/.test(velha.url || '')) await chrome.tabs.remove(velha.id).catch(() => {});
       await chrome.storage.local.set({ tabInv: null });
     }
-    const stream = await separador(g.tabStream, 'https://www.twitch.tv/directory/category/rust', false);
-    await chrome.tabs.update(stream.id, { muted: true }).catch(() => {});
-    await chrome.storage.local.set({ tabStream: stream.id });
-    const gql = criarGql(pedirPelaAba(stream.id, s.token));
-    const d = await decidir({ gql, utilizador: s.utilizador, urlAtual: stream.url, evitar: Object.keys(evitar), jogos: Array.isArray(g.jogos) ? g.jogos : null });
+    // As abas da Twitch abertas. A "nossa" e so a que a extensao abriu; se a pessoa mudar de
+    // canal nela, passa a ser dela e nunca mais mexemos nessa aba.
+    const abas = await chrome.tabs.query({ url: 'https://www.twitch.tv/*' });
+    let nossa = g.tabStream ? abas.find(t => t.id === g.tabStream) || null : null;
+    // (um "raid" da Twitch tambem muda o canal da aba sozinho: esse nao conta como a pessoa;
+    //  e uma aba de versao antiga num canal sem registo de qual era: fica para a pessoa)
+    const mudou = nossa && canalDe(nossa.url) && (g.canalNosso ? canalDe(nossa.url) !== g.canalNosso : true);
+    if (mudou && !/referrer=raid/.test(nossa.url || '')) {
+      nossa = null;
+      await chrome.storage.local.set({ tabStream: null, canalNosso: null });
+    }
+    if (nossa && nossa.discarded) { await chrome.tabs.reload(nossa.id).catch(() => {}); await dormir(6000); }
+    const canalInicio = nossa ? canalDe(nossa.url) : null;
+    const dela = abas.filter(t => (!nossa || t.id !== nossa.id) && canalDe(t.url));
+    // para as consultas basta qualquer aba da Twitch; so abrimos a nossa se nao houver nenhuma
+    if (!nossa && !abas.some(t => !t.discarded)) {
+      nossa = await separador(null, DIRETORIO, false);
+      await chrome.storage.local.set({ tabStream: nossa.id, canalNosso: null });
+    }
+    if (nossa) await chrome.tabs.update(nossa.id, { muted: true, autoDiscardable: false }).catch(() => {});
+    const abaGql = nossa || abas.find(t => !t.discarded);
+    let gql = criarGql(pedirPelaAba(abaGql.id, s.token, !!nossa && abaGql.id === nossa.id));
+    const d = await decidir({ gql, utilizador: s.utilizador, urlAtual: nossa ? nossa.url : null, evitar: Object.keys(evitar), jogos: Array.isArray(g.jogos) ? g.jogos : null });
+    // a pessoa ja esta a ver, numa aba dela, um canal que conta: deixamo-la em paz, fechamos a
+    // nossa (se houver) e nao abrimos outra
+    const queremos = d.campanhas.filter(c => c.drops.some(x => x.porVer));
+    let sua = null, abaSua = null;
+    if (queremos.length) for (const t of dela.slice(0, 6)) {
+      const la = await campanhasNoCanal(gql, canalDe(t.url), queremos).catch(() => []);
+      if (la.length) { sua = canalDe(t.url); abaSua = t; break; }
+    }
+    if (sua) {
+      // as consultas seguintes (resgates) passam a ir pela aba dela, sem nunca a recarregar
+      if (!abaSua.discarded) gql = criarGql(pedirPelaAba(abaSua.id, s.token, false));
+      if (nossa) await chrome.tabs.remove(nossa.id).catch(() => {});
+      nossa = null;
+      await chrome.storage.local.set({ tabStream: null, canalNosso: null });
+      if (d.canal !== sua) await registar(`👤 ${T.assistindo} ${sua}`);
+      d.canal = sua; d.ir = null;
+    }
     if (g.avisouLogin) await chrome.storage.local.set({ avisouLogin: false });
 
     // os minutos estao a subir? (se o canal ficar 8 min parado, muda)
@@ -223,7 +260,7 @@ async function passo() {
     if (d.ir) await registar(`▶ ${T.assistindo} ${d.ir.split('/').pop()}`);
     await chrome.storage.local.set({ ultimoErro: '' });
     const { prog, parado } = acompanhar(g.progresso, d, agora, PARADO_MIN);
-    if (parado) { await registar(`↻ ${d.canal}: ${T.trocando}`); evitar[d.canal] = agora + EVITAR_MIN * 60000; d.aviso = `${d.canal}: os minutos nao sobem ha ${PARADO_MIN} min, mudo de canal daqui a 2 min`; }
+    if (parado && !sua) { await registar(`↻ ${d.canal}: ${T.trocando}`); evitar[d.canal] = agora + EVITAR_MIN * 60000; d.aviso = `${d.canal}: os minutos nao sobem ha ${PARADO_MIN} min, mudo de canal daqui a 2 min`; }
     await chrome.storage.local.set({ evitar, progresso: prog });
 
     // (so acaba quando ja nao ha nada por resgatar)
@@ -237,8 +274,21 @@ async function passo() {
       avisar(`🎉 ${T.fim}`);
       return;
     }
-    if (d.ir) { await chrome.tabs.update(stream.id, { url: d.ir }); await dormir(8000); }
-    if (d.canal) await manterAVer(stream.id);
+    // antes de mexer na nossa aba, confere de novo: se a pessoa trocou o canal entretanto, e dela
+    if (nossa) {
+      const agoraAba = await chrome.tabs.get(nossa.id).catch(() => null);
+      if (!agoraAba || (canalDe(agoraAba.url) && canalDe(agoraAba.url) !== canalInicio && !/referrer=raid/.test(agoraAba.url || ''))) {
+        nossa = null;
+        await chrome.storage.local.set({ tabStream: null, canalNosso: null });
+      }
+    }
+    if (d.ir) {
+      if (nossa) await chrome.tabs.update(nossa.id, { url: d.ir });
+      else { nossa = await chrome.tabs.create({ url: d.ir, active: false }); await chrome.tabs.update(nossa.id, { muted: true, autoDiscardable: false }).catch(() => {}); }
+      await chrome.storage.local.set({ tabStream: nossa.id, canalNosso: canalDe(d.ir) });
+      await dormir(8000);
+    } else if (nossa && canalDe(nossa.url)) await chrome.storage.local.set({ canalNosso: canalDe(nossa.url) });
+    if (d.canal && nossa && !sua) await manterAVer(nossa.id);
     await guardarEstado(d, { procurando: !d.canal, parado, resgatados: resgatados.map(x => curto(x.nome, x.campanha || '')) });
     const so = x => x.map(y => curto(y.nome, y.campanha || '')).join(', ');
     const status = [
