@@ -212,22 +212,24 @@ async function passo() {
     const abaGql = nossa || abas.find(t => !t.discarded);
     let gql = criarGql(pedirPelaAba(abaGql.id, s.token, !!nossa && abaGql.id === nossa.id));
     const d = await decidir({ gql, utilizador: s.utilizador, urlAtual: nossa ? nossa.url : null, evitar: Object.keys(evitar), jogos: Array.isArray(g.jogos) ? g.jogos : null });
-    // a pessoa ja esta a ver, numa aba dela, um canal que conta: deixamo-la em paz, fechamos a
-    // nossa (se houver) e nao abrimos outra
-    const queremos = d.campanhas.filter(c => c.drops.some(x => x.porVer));
-    let sua = null, abaSua = null;
-    if (queremos.length) for (const t of dela.slice(0, 6)) {
-      const la = await campanhasNoCanal(gql, canalDe(t.url), queremos).catch(() => []);
-      if (la.length) { sua = canalDe(t.url); abaSua = t; break; }
-    }
-    if (sua) {
-      // as consultas seguintes (resgates) passam a ir pela aba dela, sem nunca a recarregar
-      if (!abaSua.discarded) gql = criarGql(pedirPelaAba(abaSua.id, s.token, false));
-      if (nossa) await chrome.tabs.remove(nossa.id).catch(() => {});
-      nossa = null;
-      await chrome.storage.local.set({ tabStream: null, canalNosso: null });
-      if (d.canal !== sua) await registar(`👤 ${T.assistindo} ${sua}`);
-      d.canal = sua; d.ir = null;
+    // A nossa aba nunca e fechada pela extensao (se a pessoa quiser, fecha ela). Se a pessoa a
+    // fechou e ja esta a ver, numa aba dela, um canal que conta: nao abrimos outra por cima.
+    let sua = null;
+    if (!nossa) {
+      const queremos = d.campanhas.filter(c => c.drops.some(x => x.porVer));
+      if (queremos.length) for (const t of dela.slice(0, 6)) {
+        const la = await campanhasNoCanal(gql, canalDe(t.url), queremos).catch(() => []);
+        if (la.length) {
+          sua = canalDe(t.url);
+          // as consultas seguintes (resgates) vao pela aba dela, sem nunca a recarregar
+          if (!t.discarded) gql = criarGql(pedirPelaAba(t.id, s.token, false));
+          break;
+        }
+      }
+      if (sua) {
+        if (d.canal !== sua) await registar(`👤 ${T.assistindo} ${sua}`);
+        d.canal = sua; d.ir = null;
+      }
     }
     if (g.avisouLogin) await chrome.storage.local.set({ avisouLogin: false });
 
