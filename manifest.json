@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "__MSG_appName__",
-  "version": "5.4",
+  "version": "5.6",
   "description": "__MSG_appDesc__",
   "default_locale": "en",
+  "minimum_chrome_version": "102",
   "background": {
     "service_worker": "fundo.js",
     "type": "module"
@@ -29,18 +30,6 @@
     "https://gql.twitch.tv/*",
     "https://id.twitch.tv/*",
     "https://raw.githubusercontent.com/*"
-  ],
-  "content_scripts": [
-    {
-      "matches": [
-        "https://www.twitch.tv/*"
-      ],
-      "js": [
-        "cabecalhos-twitch.js"
-      ],
-      "run_at": "document_start",
-      "world": "MAIN"
-    }
   ],
   "homepage_url": "https://tchubirs.github.io/drops/"
 }

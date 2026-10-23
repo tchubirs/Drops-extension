@@ -43,6 +43,12 @@ const guardarEstado = (d, extra = {}) => chrome.storage.local.set({ estado: {
   campanhas: d ? d.campanhas.map(c => ({ nome: c.nome, drops: c.drops.map(x => ({ nome: curto(x.nome, c.nome), imagem: x.imagem, pct: pct(x), falta: falta(x), resgatado: x.resgatado, pronto: x.pronto })) })) : [],
   semLigacao: d ? d.semLigacao : [], jogos: d ? d.jogos : [], ...extra } });
 
+// aviso no computador (a pessoa pode desligar na janelinha)
+async function notificar(opcoes) {
+  const { avisoPc } = await chrome.storage.local.get('avisoPc');
+  if (avisoPc !== false) chrome.notifications.create(opcoes);
+}
+
 // avisos no Discord (e por ele no celular): so se a pessoa colar o webhook dela no painel.
 // Vai como formulario, que o Discord aceita sem permissao extra da extensao.
 async function avisar(texto) {
@@ -85,7 +91,7 @@ function pedirPelaAba(tabId, token, podeRecarregar = true) {
             // espera ate 15 s que a pagina faca o primeiro pedido dela (com a verificacao)
             for (let i = 0; i < 30 && !(window.__twitchCabecalhos || {})['client-integrity']; i++) await new Promise(ok => setTimeout(ok, 500));
             const c = window.__twitchCabecalhos || {};
-            const cab = { 'Client-Id': c['client-id'] || id, Authorization: c.authorization || `OAuth ${token}`, 'Content-Type': 'text/plain;charset=UTF-8' };
+            const cab = { 'Client-Id': c['client-id'] || id, Authorization: `OAuth ${token}`, 'Content-Type': 'text/plain;charset=UTF-8' };
             if (c['client-integrity']) cab['Client-Integrity'] = c['client-integrity'];
             if (c['x-device-id']) cab['X-Device-Id'] = c['x-device-id'];
             if (c['client-session-id']) cab['Client-Session-Id'] = c['client-session-id'];
@@ -121,17 +127,20 @@ async function resgatarNaPagina() {
   return n;
 }
 
-// manter a stream a correr: aceitar o aviso +18, carregar no play, sem som e na qualidade
-// mais baixa (uma vez por canal; a escolha de qualidade nao fica guardada para as tuas
-// outras abas da Twitch)
-async function manterAVer(tabId) {
+// manter a stream a correr: carregar no play, sem som e na qualidade mais baixa (uma vez por
+// canal; a escolha de qualidade nao fica guardada para as tuas outras abas da Twitch). O aviso
+// "+18" so e aceite se a pessoa ligou essa opcao; senao devolve maduro: true e o canal e evitado.
+async function manterAVer(tabId, aceitar18) {
   await chrome.tabs.update(tabId, { muted: true }).catch(() => {});
-  return chrome.scripting.executeScript({ target: { tabId }, func: async () => {
+  return chrome.scripting.executeScript({ target: { tabId }, args: [!!aceitar18], func: async aceitar18 => {
     const espera = ms => new Promise(ok => setTimeout(ok, ms));
+    let maduro = false;
     for (const b of document.querySelectorAll('button')) {
       const alvo = b.getAttribute('data-a-target') || '';
-      if (/mature-accept|start-watching/i.test(alvo) || /^(start watching|começar a assistir|comecar a assistir|iniciar transmissão)$/i.test(b.textContent.trim())) b.click();
+      if (/mature-accept/i.test(alvo)) { maduro = true; if (aceitar18) b.click(); continue; }
+      if (/start-watching/i.test(alvo) || /^(start watching|começar a assistir|comecar a assistir|iniciar transmissão)$/i.test(b.textContent.trim())) { if (aceitar18) b.click(); else maduro = true; }
     }
+    if (maduro && !aceitar18) return { video: false, parado: true, maduro: true };
     const v = document.querySelector('video');
     if (v) { v.muted = true; if (v.paused) v.play().catch(() => {}); }
     if (v && window.__dropsQualidade !== location.pathname) {
@@ -211,7 +220,18 @@ async function passo() {
     if (nossa) await chrome.tabs.update(nossa.id, { muted: true, autoDiscardable: false }).catch(() => {});
     const abaGql = nossa || abas.find(t => !t.discarded);
     let gql = criarGql(pedirPelaAba(abaGql.id, s.token, !!nossa && abaGql.id === nossa.id));
-    const d = await decidir({ gql, utilizador: s.utilizador, urlAtual: nossa ? nossa.url : null, evitar: Object.keys(evitar), jogos: Array.isArray(g.jogos) ? g.jogos : null });
+    const pedirDecisao = () => decidir({ gql, utilizador: s.utilizador, urlAtual: nossa ? nossa.url : null, evitar: Object.keys(evitar), jogos: Array.isArray(g.jogos) ? g.jogos : null });
+    let d;
+    try { d = await pedirDecisao(); } catch (e) {
+      // a aba da pessoa ainda nao tem a verificacao da Twitch (foi aberta antes de ligar e nao a
+      // podemos recarregar): abrimos a nossa, em segundo plano e no diretorio, so para as consultas
+      if (nossa || !/Client-Integrity|IntegrityCheck/i.test(e.message)) throw e;
+      nossa = await separador(null, DIRETORIO, false);
+      await chrome.tabs.update(nossa.id, { muted: true }).catch(() => {});
+      await chrome.storage.local.set({ tabStream: nossa.id, canalNosso: null });
+      gql = criarGql(pedirPelaAba(nossa.id, s.token, true));
+      d = await pedirDecisao();
+    }
     // A nossa aba nunca e fechada pela extensao (se a pessoa quiser, fecha ela). Se a pessoa a
     // fechou e ja esta a ver, numa aba dela, um canal que conta: nao abrimos outra por cima.
     let sua = null;
@@ -253,7 +273,7 @@ async function passo() {
         const ids = new Set(resgatados.map(x => x.id));
         for (const c of d.campanhas) for (const x of c.drops) if (ids.has(x.id)) { x.resgatado = true; x.pronto = false; x.feito = true; }
         d.prontos = d.prontos.filter(x => !resgatados.includes(x));
-        chrome.notifications.create({ type: 'basic', iconUrl: 'icone.png', title: NOME, message: `🎁 ${T.resgatado}: ${resgatados.map(x => curto(x.nome, x.campanha || '')).join(', ')}` });
+        notificar({ type: 'basic', iconUrl: 'icone.png', title: NOME, message: `🎁 ${T.resgatado}: ${resgatados.map(x => curto(x.nome, x.campanha || '')).join(', ')}` });
         avisar(`🎁 ${T.resgatado}: ${resgatados.map(x => curto(x.nome, x.campanha || '')).join(', ')}`);
       }
     }
@@ -268,11 +288,12 @@ async function passo() {
     // (so acaba quando ja nao ha nada por resgatar)
     if (d.fim && !d.prontos.length) {
       await chrome.storage.local.set({ ligado: false });
+      await captura(false);
       await guardarEstado(d, { fim: true });
       await registar(`🎉 ${T.fim}`);
       await iconeNormal();
       await mostrar('✓', '#1f7a3d', titulo(d, [`🎉  ${T.fim}`]));
-      chrome.notifications.create({ type: 'basic', iconUrl: 'icone.png', title: NOME, message: `🎉 ${T.fim}` });
+      notificar({ type: 'basic', iconUrl: 'icone.png', title: NOME, message: `🎉 ${T.fim}` });
       avisar(`🎉 ${T.fim}`);
       return;
     }
@@ -290,7 +311,12 @@ async function passo() {
       await chrome.storage.local.set({ tabStream: nossa.id, canalNosso: canalDe(d.ir) });
       await dormir(8000);
     } else if (nossa && canalDe(nossa.url)) await chrome.storage.local.set({ canalNosso: canalDe(nossa.url) });
-    if (d.canal && nossa && !sua) await manterAVer(nossa.id);
+    if (d.canal && nossa && !sua) {
+      const { aceitar18 } = await chrome.storage.local.get('aceitar18');
+      const v = await manterAVer(nossa.id, aceitar18 === true);
+      // canal +18 sem a pessoa ter aceitado: evita-o e no proximo ciclo vai para outro
+      if (v && v.maduro) { evitar[d.canal] = agora + EVITAR_MIN * 60000; await chrome.storage.local.set({ evitar }); await registar(`🔞 ${d.canal}: ${T.pulei18}`); }
+    }
     await guardarEstado(d, { procurando: !d.canal, parado, resgatados: resgatados.map(x => curto(x.nome, x.campanha || '')) });
     const so = x => x.map(y => curto(y.nome, y.campanha || '')).join(', ');
     const status = [
@@ -330,10 +356,25 @@ function titulo(d, status) {
   return [`${NOME}  ·  ${d.feitos} ${T.de} ${d.total} ✓${faltaTotal(d) ? `  ·  ⏱ ${tempo(faltaTotal(d))}` : ''}`, ...status.filter(Boolean), '', corpo].join('\n');
 }
 
+// A leitura dos cabecalhos nas paginas da Twitch so existe com a extensao ligada: ligar regista o
+// script (e poe-no nas abas da Twitch ja abertas); pausar tira-o e apaga o que a pagina guardou.
+const CAPTURA = { id: 'cabecalhos', matches: ['https://www.twitch.tv/*'], js: ['cabecalhos-twitch.js'], runAt: 'document_start', world: 'MAIN' };
+async function captura(ligar) {
+  const ja = await chrome.scripting.getRegisteredContentScripts({ ids: [CAPTURA.id] }).catch(() => []);
+  if (ligar && !ja.length) await chrome.scripting.registerContentScripts([CAPTURA]).catch(() => {});
+  if (!ligar && ja.length) await chrome.scripting.unregisterContentScripts({ ids: [CAPTURA.id] }).catch(() => {});
+  for (const t of await chrome.tabs.query({ url: 'https://www.twitch.tv/*' })) {
+    if (t.discarded) continue;
+    if (ligar) await chrome.scripting.executeScript({ target: { tabId: t.id }, world: 'MAIN', files: ['cabecalhos-twitch.js'] }).catch(() => {});
+    else await chrome.scripting.executeScript({ target: { tabId: t.id }, world: 'MAIN', func: () => { window.__dropgoLigado = false; delete window.__twitchCabecalhos; } }).catch(() => {});
+  }
+}
+
 async function alternar() {
   const { ligado } = await guardado();
   await chrome.storage.local.set({ ligado: !ligado, evitar: {}, progresso: {}, estado: { quando: Date.now(), comecando: !ligado } });
   await registar(ligado ? T.pausado : T.ligar);
+  await captura(!ligado);
   if (!ligado) await chrome.alarms.create('drops', { periodInMinutes: 2 });
   if (ligado) { await iconeNormal(); await mostrar('', null, `${NOME}\n${T.pausado}`); }
   else { await mostrar('…', '#53535f', `${NOME}\n${T.comecando}`); passo(); }
@@ -358,5 +399,6 @@ chrome.contextMenus.onClicked.addListener(i => {
   if (i.menuItemId === 'ajuda') chrome.tabs.create({ url: AJUDA });
   if (i.menuItemId === 'registo') chrome.tabs.create({ url: chrome.runtime.getURL('registo.html') });
 });
-chrome.runtime.onStartup.addListener(() => { menu(); passo(); });
-chrome.runtime.onInstalled.addListener(() => { menu(); passo(); });
+const arrancar = async () => { menu(); const { ligado } = await chrome.storage.local.get('ligado'); await captura(!!ligado); passo(); };
+chrome.runtime.onStartup.addListener(arrancar);
+chrome.runtime.onInstalled.addListener(arrancar);

@@ -9,7 +9,7 @@
       anterior: 'Resgate o drop anterior no inventário', steam: 'Conecte a Twitch à Steam pra receber:',
       discordPassos: 'No Discord: Editar canal → Integrações → Webhooks → Novo webhook → Copiar URL. Cole aqui:',
       repouso: 'Sem drops ativos: confiro de hora em hora', ativo: 'Drops ativos: confiro a cada 2 minutos',
-      menuAjuda: 'Como funciona e privacidade', menuRegisto: 'Ver histórico', registoTit: 'Histórico',
+      avisoPc: 'Avisar no computador', aceitar18: 'Aceitar o aviso +18 das lives automaticamente', pulei18: 'live +18, pulei (dá pra ligar na janelinha)', menuAjuda: 'Como funciona e privacidade', menuRegisto: 'Ver histórico', registoTit: 'Histórico',
       registoDesc: 'O que a extensão fez, guardado só neste Chrome (últimas 100 entradas).', limpar: 'Limpar', semEntradas: 'Ainda sem entradas.',
     },
     es: {
@@ -20,7 +20,7 @@
       anterior: 'Reclama el drop anterior en el inventario', steam: 'Conecta Twitch con Steam para recibir:',
       discordPassos: 'En Discord: Editar canal → Integraciones → Webhooks → Nuevo webhook → Copiar URL. Pégala aquí:',
       repouso: 'Sin drops activos: reviso cada hora', ativo: 'Drops activos: reviso cada 2 minutos',
-      menuAjuda: 'Cómo funciona y privacidad', menuRegisto: 'Ver historial', registoTit: 'Historial',
+      avisoPc: 'Avisar en la computadora', aceitar18: 'Aceptar el aviso +18 de los directos automáticamente', pulei18: 'directo +18, lo salté (se puede activar en la ventanita)', menuAjuda: 'Cómo funciona y privacidad', menuRegisto: 'Ver historial', registoTit: 'Historial',
       registoDesc: 'Lo que hizo la extensión, guardado solo en este Chrome (últimas 100 entradas).', limpar: 'Borrar', semEntradas: 'Todavía no hay entradas.',
     },
     en: {
@@ -31,7 +31,7 @@
       anterior: 'Claim the previous drop in your inventory', steam: 'Link Twitch to Steam to receive:',
       discordPassos: 'In Discord: Edit channel → Integrations → Webhooks → New webhook → Copy URL. Paste it here:',
       repouso: 'No active drops: checking every hour', ativo: 'Active drops: checking every 2 minutes',
-      menuAjuda: 'How it works and privacy', menuRegisto: 'View history', registoTit: 'History',
+      avisoPc: 'Desktop notifications', aceitar18: 'Automatically accept the 18+ warning on streams', pulei18: '18+ stream, skipped (can be enabled in the popup)', menuAjuda: 'How it works and privacy', menuRegisto: 'View history', registoTit: 'History',
       registoDesc: 'What the extension did, stored only in this Chrome (last 100 entries).', limpar: 'Clear', semEntradas: 'No entries yet.',
     },
   };

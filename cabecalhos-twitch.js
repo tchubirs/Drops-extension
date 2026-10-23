@@ -1,12 +1,17 @@
-// Le os cabecalhos dos pedidos que a propria pagina da Twitch faz a gql.twitch.tv e guarda-os
-// na memoria da pagina (window.__twitchCabecalhos), para a extensao os reutilizar nos seus
-// pedidos a mesma Twitch. Sao: o "Client-Integrity" (verificacao que a Twitch exige para ler as
-// campanhas de drops), identificadores de sessao e de versao, e o token de sessao da propria
-// Twitch (Authorization). Nao muda nada nos pedidos da pagina. Nao grava em disco e nao envia
-// nada para nenhum outro sitio: so sao usados em pedidos a gql.twitch.tv (ver fundo.js).
+// So corre enquanto o DropGo esta ligado (ver captura() em fundo.js). Le os cabecalhos dos
+// pedidos que a propria pagina da Twitch faz a gql.twitch.tv e guarda-os na memoria da pagina
+// (window.__twitchCabecalhos), para a extensao os reutilizar nos seus pedidos a mesma Twitch.
+// Sao so: o "Client-Integrity" (verificacao que a Twitch exige para ler as campanhas de drops)
+// e identificadores de sessao, de dispositivo e de versao. O login NAO e copiado daqui (a
+// extensao usa o cookie de sessao da Twitch). Nao muda nada nos pedidos da pagina, nao grava
+// em disco e nao envia nada para nenhum outro sitio.
 (() => {
-  const QUERO = ['client-integrity', 'x-device-id', 'client-session-id', 'client-version', 'client-id', 'authorization'];
+  window.__dropgoLigado = true;
+  if (window.__dropgoGancho) return;      // ja instalado nesta pagina
+  window.__dropgoGancho = true;
+  const QUERO = ['client-integrity', 'x-device-id', 'client-session-id', 'client-version', 'client-id'];
   const guardar = (url, cab) => {
+    if (window.__dropgoLigado === false) return;   // pausado: nao le nada
     if (!/gql\.twitch\.tv/.test(String(url || ''))) return;
     const out = window.__twitchCabecalhos || {};
     const por = (k, v) => { if (QUERO.includes(String(k).toLowerCase()) && v) out[String(k).toLowerCase()] = String(v); };
